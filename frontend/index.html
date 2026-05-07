@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>TamoAqui</title>
+
+<style>
+
+/* RESET */
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+}
+
+/* BASE */
+body{
+  font-family:Arial, sans-serif;
+  background:#f5f5f5;
+  color:#222;
+}
+
+/* TOPBAR */
+.topbar{
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:65px;
+  background:#ff7a00;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 20px;
+  color:white;
+  z-index:1000;
+  transition:0.3s;
+  box-shadow:0 2px 10px rgba(0,0,0,0.1);
+}
+
+.topbar h1{
+  font-size:22px;
+}
+
+.topbar small{
+  color:rgba(255,255,255,0.8);
+}
+
+/* CONTAINER */
+.container{
+  max-width:700px;
+  margin:auto;
+  padding:90px 15px 30px;
+}
+
+/* LOGIN */
+.login-container{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
+}
+
+.login-box{
+  width:100%;
+  max-width:340px;
+  background:white;
+  padding:30px;
+  border-radius:16px;
+  box-shadow:0 4px 20px rgba(0,0,0,0.08);
+}
+
+.logo{
+  text-align:center;
+  color:#ff7a00;
+  margin-bottom:5px;
+}
+
+.subtitle{
+  text-align:center;
+  color:#777;
+  margin-bottom:20px;
+  font-size:13px;
+}
+
+/* LABEL */
+label{
+  display:block;
+  margin-top:12px;
+  margin-bottom:5px;
+  font-size:14px;
+}
+
+/* INPUTS */
+input,
+textarea,
+select{
+  width:100%;
+  padding:12px;
+  border-radius:8px;
+  border:1px solid #ddd;
+  font-size:14px;
+}
+
+textarea{
+  resize:none;
+  height:90px;
+}
+
+/* BOTÕES */
+button{
+  border:none;
+  border-radius:8px;
+  padding:12px;
+  cursor:pointer;
+  font-weight:bold;
+  margin-top:10px;
+  transition:0.2s;
+}
+
+button:hover{
+  opacity:0.9;
+}
+
+.primary{
+  background:#ff7a00;
+  color:white;
+  width:100%;
+}
+
+.gray{
+  background:#ddd;
+}
+
+.danger{
+  background:#ff3b30;
+  color:white;
+}
+
+/* CARD */
+.card{
+  background:white;
+  padding:15px;
+  border-radius:14px;
+  margin-top:15px;
+  box-shadow:0 2px 10px rgba(0,0,0,0.05);
+  transition:0.2s;
+}
+
+.card:hover{
+  transform:translateY(-2px);
+}
+
+.urgente{
+  border-left:5px solid #ff3b30;
+}
+
+/* TEXTO */
+small{
+  color:#666;
+}
+
+/* IMAGEM */
+img{
+  width:100%;
+  border-radius:10px;
+  margin-top:10px;
+}
+
+/* TAG */
+.tag{
+  display:inline-block;
+  padding:5px 10px;
+  border-radius:20px;
+  margin-top:10px;
+  font-size:12px;
+  font-weight:bold;
+  color:white;
+}
+
+.baixa{
+  background:#4caf50;
+}
+
+.normal{
+  background:#ff9800;
+}
+
+.alta{
+  background:#ff3b30;
+}
+
+/* AÇÕES */
+.actions{
+  display:flex;
+  gap:10px;
+  margin-top:10px;
+}
+
+.actions button{
+  flex:1;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container" id="app"></div>
+
+<script>
+
+let user = null;
+
+let posts =
+JSON.parse(localStorage.getItem("posts")) || [];
+
+let imagemBase64 = "";
+
+let localAtual = "Local desconhecido";
+
+/* GPS */
+navigator.geolocation.getCurrentPosition(
+  () => localAtual = "GPS ativo",
+  () => localAtual = "Local não permitido"
+);
+
+/* SALVAR */
+function salvar(){
+  localStorage.setItem(
+    "posts",
+    JSON.stringify(posts)
+  );
+}
+
+/* RENDER */
+function render(){
+
+  const app =
+  document.getElementById("app");
+
+  /* LOGIN */
+  if(!user){
+
+    app.innerHTML = `
+    
+    <div class="login-container">
+
+      <div class="login-box">
+
+        <h1 class="logo">
+          TamoAqui
+        </h1>
+
+        <p class="subtitle">
+          de cidadão para cidadão
+        </p>
+
+        <label>Nome</label>
+        <input
+          id="nome"
+          placeholder="Seu nome"
+        >
+
+        <label>Email</label>
+        <input
+          id="email"
+          type="email"
+          placeholder="Digite seu email"
+        >
+
+        <label>Senha</label>
+        <input
+          id="senha"
+          type="password"
+          placeholder="Digite sua senha"
+        >
+
+        <label>Tipo de conta</label>
+
+        <select id="tipo">
+          <option value="cidadao">
+            Cidadão
+          </option>
+
+          <option value="prefeitura">
+            Prefeitura
+          </option>
+        </select>
+
+        <button
+          class="primary"
+          onclick="login()"
+        >
+          Entrar
+        </button>
+
+      </div>
+
+    </div>
+
+    `;
+
+    return;
+  }
+
+  /* FEED */
+  app.innerHTML = `
+
+  <div class="topbar" id="topbar">
+
+    <div>
+      <h1>TamoAqui</h1>
+
+      <small>
+        de cidadão para cidadão
+      </small>
+    </div>
+
+  </div>
+
+  <h2>
+    Bem-vindo (${user.tipo})
+  </h2>
+
+  <p>
+    Total de denúncias:
+    ${posts.length}
+  </p>
+
+  ${
+    user.tipo === "cidadao"
+
+    ?
+
+    `
+    <div class="card">
+
+      <textarea
+        id="texto"
+        placeholder="Descreva a reclamação"
+      ></textarea>
+
+      <input
+        id="bairro"
+        placeholder="Bairro ou local"
+      >
+
+      <input
+        type="file"
+        onchange="carregarImagem(event)"
+      >
+
+      <select id="categoria">
+        <option>Alagamento</option>
+        <option>Asfalto</option>
+        <option>Hospital</option>
+        <option>Escola</option>
+        <option>Museu</option>
+      </select>
+
+      <select id="urgencia">
+        <option value="baixa">
+          Baixa
+        </option>
+
+        <option value="normal">
+          Normal
+        </option>
+
+        <option value="alta">
+          Alta
+        </option>
+      </select>
+
+      <button
+        class="primary"
+        onclick="criarPost()"
+      >
+        Postar
+      </button>
+
+    </div>
+    `
+
+    :
+
+    ""
+  }
+
+  <div class="card">
+
+    <input
+      id="filtro"
+      placeholder="Buscar reclamações..."
+    >
+
+    <input
+      id="filtroCidade"
+      placeholder="Cidade"
+    >
+
+    <select id="filtroCategoria">
+
+      <option value="">
+        Todas categorias
+      </option>
+
+      <option>
+        Alagamento
+      </option>
+
+      <option>
+        Asfalto
+      </option>
+
+      <option>
+        Hospital
+      </option>
+
+      <option>
+        Escola
+      </option>
+
+    </select>
+
+    <select id="ordenar">
+
+      <option value="novo">
+        Mais recentes
+      </option>
+
+      <option value="likes">
+        Mais curtidos
+      </option>
+
+    </select>
+
+    <button onclick="filtrar()">
+      Aplicar
+    </button>
+
+    <button
+      class="gray"
+      onclick="limpar()"
+    >
+      Limpar tudo
+    </button>
+
+  </div>
+
+  <div id="feed"></div>
+
+  `;
+
+  renderPosts(posts);
+}
+
+/* LOGIN */
+function login(){
+
+  const nome =
+  document.getElementById("nome").value;
+
+  const email =
+  document.getElementById("email").value;
+
+  const senha =
+  document.getElementById("senha").value;
+
+  const tipo =
+  document.getElementById("tipo").value;
+
+  if(!nome || !email || !senha){
+
+    alert(
+      "Preencha todos os campos!"
+    );
+
+    return;
+  }
+
+  if(senha.length < 4){
+
+    alert(
+      "A senha deve ter pelo menos 4 caracteres"
+    );
+
+    return;
+  }
+
+  user = {
+    nome,
+    email,
+    tipo
+  };
+
+  render();
+}
+
+/* IMAGEM */
+function carregarImagem(e){
+
+  const file = e.target.files[0];
+
+  const reader = new FileReader();
+
+  reader.onload =
+  ev => imagemBase64 = ev.target.result;
+
+  reader.readAsDataURL(file);
+}
+
+/* CRIAR POST */
+function criarPost(){
+
+  const texto =
+  document.getElementById("texto").value;
+
+  const categoria =
+  document.getElementById("categoria").value;
+
+  const urgencia =
+  document.getElementById("urgencia").value;
+
+  const bairro =
+  document.getElementById("bairro").value;
+
+  if(!texto){
+
+    alert("Escreva algo!");
+
+    return;
+  }
+
+  posts.unshift({
+
+    autor:user.nome,
+
+    prefeitura:
+    user.tipo === "prefeitura",
+
+    texto,
+
+    categoria,
+
+    urgencia,
+
+    likes:0,
+
+    local:
+    bairro || localAtual,
+
+    imagem:imagemBase64,
+
+    resposta:""
+
+  });
+
+  imagemBase64 = "";
+
+  salvar();
+
+  render();
+}
+
+/* CURTIR */
+function curtir(i){
+
+  posts[i].likes++;
+
+  salvar();
+
+  render();
+}
+
+/* EXCLUIR */
+function excluir(i){
+
+  if(confirm("Excluir post?")){
+
+    posts.splice(i,1);
+
+    salvar();
+
+    render();
+  }
+}
+
+/* RESPONDER */
+function responder(i){
+
+  const r =
+  prompt("Resposta:");
+
+  if(r){
+
+    posts[i].resposta = r;
+
+    salvar();
+
+    render();
+  }
+}
+
+/* LIMPAR */
+function limpar(){
+
+  if(confirm("Apagar tudo?")){
+
+    posts = [];
+
+    salvar();
+
+    render();
+  }
+}
+
+/* FILTRAR */
+function filtrar(){
+
+  let lista = [...posts];
+
+  const termo =
+  document.getElementById("filtro")
+  .value.toLowerCase();
+
+  const cat =
+  document.getElementById(
+    "filtroCategoria"
+  ).value;
+
+  const ord =
+  document.getElementById(
+    "ordenar"
+  ).value;
+
+  if(termo){
+
+    lista = lista.filter(
+      p =>
+      p.texto
+      .toLowerCase()
+      .includes(termo)
+    );
+  }
+
+  if(cat){
+
+    lista = lista.filter(
+      p => p.categoria === cat
+    );
+  }
+
+  if(ord === "likes"){
+
+    lista.sort(
+      (a,b) => b.likes - a.likes
+    );
+  }
+
+  renderPosts(lista);
+}
+
+/* POSTS */
+function renderPosts(lista){
+
+  const feed =
+  document.getElementById("feed");
+
+  feed.innerHTML = "";
+
+  lista.forEach((p,i)=>{
+
+    feed.innerHTML += `
+
+    <div class="card ${
+      p.urgencia === "alta"
+      ?
+      "urgente"
+      :
+      ""
+    }">
+
+      <h3>
+        ${p.autor}
+
+        ${
+          p.prefeitura
+          ?
+          " ✔️"
+          :
+          ""
+        }
+      </h3>
+
+      <p>${p.texto}</p>
+
+      <small>
+        ${p.categoria}
+        •
+        ${p.local}
+      </small>
+
+      <div class="tag ${p.urgencia}">
+        ${p.urgencia.toUpperCase()}
+      </div>
+
+      ${
+        p.imagem
+        ?
+        `<img src="${p.imagem}">`
+        :
+        ""
+      }
+
+      <div class="actions">
+
+        <button onclick="curtir(${i})">
+          ❤️ ${p.likes}
+        </button>
+
+        ${
+          user.tipo === "prefeitura"
+          ?
+          `
+          <button onclick="responder(${i})">
+            Responder
+          </button>
+
+          <button
+            class="danger"
+            onclick="excluir(${i})"
+          >
+            Excluir
+          </button>
+          `
+          :
+          ""
+        }
+
+      </div>
+
+      ${
+        p.resposta
+        ?
+        `
+        <p>
+          <b>Prefeitura:</b>
+          ${p.resposta}
+        </p>
+        `
+        :
+        ""
+      }
+
+    </div>
+
+    `;
+  });
+}
+
+/* TOPBAR RETRÁTIL */
+let lastScroll = 0;
+
+window.addEventListener(
+  "scroll",
+  ()=>{
+
+    const topbar =
+    document.getElementById("topbar");
+
+    if(!topbar) return;
+
+    if(window.scrollY > lastScroll){
+
+      topbar.style.top = "-80px";
+
+    }else{
+
+      topbar.style.top = "0";
+    }
+
+    lastScroll = window.scrollY;
+  }
+);
+
+/* MOSTRAR TOPBAR */
+document.addEventListener(
+  "mousemove",
+  (e)=>{
+
+    const topbar =
+    document.getElementById("topbar");
+
+    if(!topbar) return;
+
+    if(e.clientY < 80){
+
+      topbar.style.top = "0";
+    }
+  }
+);
+
+render();
+
+</script>
+
+</body>
+</html>
