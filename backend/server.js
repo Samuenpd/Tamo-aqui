@@ -12,29 +12,22 @@ app.use(express.json({ limit: "50mb" }));
 
 const SECRET = "segredo";
 
-
-// ==========================
-// CADASTRO
-// ==========================
 app.post("/register", async (req, res) => {
 
     const { email, senha, tipo } = req.body;
 
-    if (!email || !senha) {
-        return res.status(400).json({
-            erro: "Campos obrigatórios"
-        });
-    }
-
     const hash = await bcrypt.hash(senha, 10);
 
-    db.query(
-        "INSERT INTO usuarios (email, senha, tipo) VALUES (?, ?, ?)",
+    db.run(
+        `
+        INSERT INTO usuarios (email, senha, tipo)
+        VALUES (?, ?, ?)
+        `,
         [email, hash, tipo],
-        (err) => {
+        function(err) {
 
             if (err) {
-                return res.status(500).json({
+                return res.json({
                     erro: "Usuário já existe"
                 });
             }
@@ -47,25 +40,23 @@ app.post("/register", async (req, res) => {
 });
 
 
-// ==========================
-// LOGIN
-// ==========================
 app.post("/login", (req, res) => {
 
     const { email, senha } = req.body;
 
-    db.query(
-        "SELECT * FROM usuarios WHERE email = ?",
+    db.get(
+        `
+        SELECT * FROM usuarios
+        WHERE email = ?
+        `,
         [email],
-        async (err, result) => {
+        async (err, usuario) => {
 
-            if (result.length === 0) {
-                return res.status(401).json({
+            if (!usuario) {
+                return res.json({
                     erro: "Usuário não encontrado"
                 });
             }
-
-            const usuario = result[0];
 
             const ok = await bcrypt.compare(
                 senha,
@@ -73,7 +64,7 @@ app.post("/login", (req, res) => {
             );
 
             if (!ok) {
-                return res.status(401).json({
+                return res.json({
                     erro: "Senha incorreta"
                 });
             }
@@ -94,25 +85,22 @@ app.post("/login", (req, res) => {
     );
 });
 
-
-// ==========================
-// PEGAR POSTS
-// ==========================
 app.get("/posts", (req, res) => {
 
-    db.query(
-        "SELECT * FROM posts ORDER BY id DESC",
-        (err, result) => {
+    db.all(
+        `
+        SELECT * FROM posts
+        ORDER BY id DESC
+        `,
+        [],
+        (err, rows) => {
 
-            res.json(result);
+            res.json(rows);
         }
     );
 });
 
 
-// ==========================
-// CRIAR POST
-// ==========================
 app.post("/posts", (req, res) => {
 
     const {
@@ -123,10 +111,18 @@ app.post("/posts", (req, res) => {
         imagem
     } = req.body;
 
-    db.query(
-        `INSERT INTO posts
-        (texto, categoria, urgencia, localizacao, imagem)
-        VALUES (?, ?, ?, ?, ?)`,
+    db.run(
+        `
+        INSERT INTO posts
+        (
+            texto,
+            categoria,
+            urgencia,
+            localizacao,
+            imagem
+        )
+        VALUES (?, ?, ?, ?, ?)
+        `,
         [
             texto,
             categoria,
@@ -134,7 +130,13 @@ app.post("/posts", (req, res) => {
             localizacao,
             imagem
         ],
-        () => {
+        function(err) {
+
+            if (err) {
+                return res.json({
+                    erro: err.message
+                });
+            }
 
             res.json({
                 mensagem: "Post criado"
@@ -144,15 +146,16 @@ app.post("/posts", (req, res) => {
 });
 
 
-// ==========================
-// CURTIR
-// ==========================
 app.put("/posts/:id/like", (req, res) => {
 
-    db.query(
-        "UPDATE posts SET likes = likes + 1 WHERE id = ?",
+    db.run(
+        `
+        UPDATE posts
+        SET likes = likes + 1
+        WHERE id = ?
+        `,
         [req.params.id],
-        () => {
+        function(err) {
 
             res.json({
                 mensagem: "Like adicionado"
@@ -169,10 +172,14 @@ app.put("/posts/:id/resposta", (req, res) => {
 
     const { resposta } = req.body;
 
-    db.query(
-        "UPDATE posts SET resposta = ? WHERE id = ?",
+    db.run(
+        `
+        UPDATE posts
+        SET resposta = ?
+        WHERE id = ?
+        `,
         [resposta, req.params.id],
-        () => {
+        function(err) {
 
             res.json({
                 mensagem: "Resposta enviada"
@@ -181,16 +188,15 @@ app.put("/posts/:id/resposta", (req, res) => {
     );
 });
 
-
-// ==========================
-// EXCLUIR
-// ==========================
 app.delete("/posts/:id", (req, res) => {
 
-    db.query(
-        "DELETE FROM posts WHERE id = ?",
+    db.run(
+        `
+        DELETE FROM posts
+        WHERE id = ?
+        `,
         [req.params.id],
-        () => {
+        function(err) {
 
             res.json({
                 mensagem: "Post deletado"
@@ -201,5 +207,5 @@ app.delete("/posts/:id", (req, res) => {
 
 
 app.listen(3000, () => {
-    console.log("Servidor rodando");
+    console.log("Servidor rodando na porta 3000");
 });
