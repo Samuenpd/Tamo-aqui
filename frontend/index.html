@@ -1,223 +1,26 @@
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>TamoAqui</title>
+  <title>TamoAqui</title>
 
-<style>
-
-/* RESET */
-*{
-  margin:0;
-  padding:0;
-  box-sizing:border-box;
-}
-
-/* BASE */
-body{
-  font-family:Arial, sans-serif;
-  background:#f5f5f5;
-  color:#222;
-}
-
-/* TOPBAR */
-.topbar{
-  position:fixed;
-  top:0;
-  left:0;
-  width:100%;
-  height:65px;
-  background:#ff7a00;
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  padding:0 20px;
-  color:white;
-  z-index:1000;
-  transition:0.3s;
-  box-shadow:0 2px 10px rgba(0,0,0,0.1);
-}
-
-.topbar h1{
-  font-size:22px;
-}
-
-.topbar small{
-  color:rgba(255,255,255,0.8);
-}
-
-/* CONTAINER */
-.container{
-  max-width:700px;
-  margin:auto;
-  padding:90px 15px 30px;
-}
-
-/* LOGIN */
-.login-container{
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  height:100vh;
-}
-
-.login-box{
-  width:100%;
-  max-width:340px;
-  background:white;
-  padding:30px;
-  border-radius:16px;
-  box-shadow:0 4px 20px rgba(0,0,0,0.08);
-}
-
-.logo{
-  text-align:center;
-  color:#ff7a00;
-  margin-bottom:5px;
-}
-
-.subtitle{
-  text-align:center;
-  color:#777;
-  margin-bottom:20px;
-  font-size:13px;
-}
-
-/* LABEL */
-label{
-  display:block;
-  margin-top:12px;
-  margin-bottom:5px;
-  font-size:14px;
-}
-
-/* INPUTS */
-input,
-textarea,
-select{
-  width:100%;
-  padding:12px;
-  border-radius:8px;
-  border:1px solid #ddd;
-  font-size:14px;
-}
-
-textarea{
-  resize:none;
-  height:90px;
-}
-
-/* BOTÕES */
-button{
-  border:none;
-  border-radius:8px;
-  padding:12px;
-  cursor:pointer;
-  font-weight:bold;
-  margin-top:10px;
-  transition:0.2s;
-}
-
-button:hover{
-  opacity:0.9;
-}
-
-.primary{
-  background:#ff7a00;
-  color:white;
-  width:100%;
-}
-
-.gray{
-  background:#ddd;
-}
-
-.danger{
-  background:#ff3b30;
-  color:white;
-}
-
-/* CARD */
-.card{
-  background:white;
-  padding:15px;
-  border-radius:14px;
-  margin-top:15px;
-  box-shadow:0 2px 10px rgba(0,0,0,0.05);
-  transition:0.2s;
-}
-
-.card:hover{
-  transform:translateY(-2px);
-}
-
-.urgente{
-  border-left:5px solid #ff3b30;
-}
-
-/* TEXTO */
-small{
-  color:#666;
-}
-
-/* IMAGEM */
-img{
-  width:100%;
-  border-radius:10px;
-  margin-top:10px;
-}
-
-/* TAG */
-.tag{
-  display:inline-block;
-  padding:5px 10px;
-  border-radius:20px;
-  margin-top:10px;
-  font-size:12px;
-  font-weight:bold;
-  color:white;
-}
-
-.baixa{
-  background:#4caf50;
-}
-
-.normal{
-  background:#ff9800;
-}
-
-.alta{
-  background:#ff3b30;
-}
-
-/* AÇÕES */
-.actions{
-  display:flex;
-  gap:10px;
-  margin-top:10px;
-}
-
-.actions button{
-  flex:1;
-}
-
-</style>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/buttons.css">
 </head>
 
 <body>
 
-<script>
+  <div class="container" id="app"></div>
 
-const user = JSON.parse(localStorage.getItem("user"));
-
-if(user){
-  window.location.href = "feed.html";
-}else{
-  window.location.href = "login.html";
-}
-</script>
+  <script src="js/storage.js"></script>
+  <script src="js/login.js"></script>
+  <script src="js/posts.js"></script>
+  <script src="js/filtros.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
 
 </body>
 </html>

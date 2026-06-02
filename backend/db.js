@@ -1,35 +1,19 @@
-const sqlite3 = require("sqlite3").verbose();
+const mysql = require("mysql2");
 
-const db = new sqlite3.Database("./database.db", (err) => {
-
-    if (err) {
-        console.log(err.message);
-    } else {
-        console.log("SQLite conectado");
-    }
+const db = mysql.createConnection({
+    host: "localhost",
+    user: "root",
+    password: "SUA_SENHA",
+    database: "tamo_aqui"
 });
 
+db.connect((err) => {
+    if (err) {
+        console.error("Erro ao conectar:", err);
+        return;
+    }
 
-db.run(`
-CREATE TABLE IF NOT EXISTS usuarios (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE,
-    senha TEXT,
-    tipo TEXT
-)
-`);
-
-db.run(`
-CREATE TABLE IF NOT EXISTS posts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    texto TEXT,
-    categoria TEXT,
-    urgencia TEXT,
-    localizacao TEXT,
-    imagem TEXT,
-    likes INTEGER DEFAULT 0,
-    resposta TEXT
-)
-`);
+    console.log("MySQL conectado");
+});
 
 module.exports = db;
