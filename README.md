@@ -171,14 +171,11 @@ O projeto está passando pela fase de construção e validação do MVP.
 🌐 Aplicação:
 https://tamo-aqui.pages.dev
 
-📦 Repositório:
-Adicione aqui o link do seu GitHub quando o repositório estiver público.
-
 ---
 
 👨‍💻 Desenvolvedor
 
-Projeto desenvolvido por Samuel de Lima Milare como parte da minha jornada de aprendizado e desenvolvimento de soluções utilizando tecnologia para problemas reais.
+Projeto desenvolvido pela equipe LudusCode como parte da nossa jornada de aprendizado e desenvolvimento de soluções utilizando tecnologia para problemas reais.
 
 ---
 
