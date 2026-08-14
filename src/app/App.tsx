@@ -131,7 +131,7 @@ function WelcomeScreen({ onChoose, dark, onToggleDark }: { onChoose: (r: Role) =
       </div>
 
       <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="text-xs text-muted-foreground mt-10 text-center">
-        Versão 2.5.2 · Secretaria de Serviços Urbanos
+        Versão 2.5.3 · Secretaria de Serviços Urbanos
       </motion.p>
     </div>
   );
@@ -1721,13 +1721,10 @@ function AuthenticatedApp({ profile }: { profile: Profile }) {
   const onToggleDark = () => setDark((d) => !d);
   const onLogout = async () => {
     try {
-      const result = await signOut();
-      if (result && typeof result === "object" && "error" in result && result.error) {
-        console.error("Erro ao sair da conta:", result.error);
-        return;
-      }
-      // Garante que a sessão/estado do Supabase e o estado local do React sejam limpos.
-      window.location.replace(window.location.origin);
+      // O AuthProvider limpa session/user/profile no próprio signOut().
+      // Não usamos window.location.replace aqui: a navegação para a tela
+      // de login é controlada pelo Root através do estado de autenticação.
+      await signOut();
     } catch (error) {
       console.error("Erro ao sair da conta:", error);
     }
@@ -1805,4 +1802,4 @@ export default function App() {
     </AuthProvider>
   );
 }
-//adf
+//tá ficando foda mexer nisso
