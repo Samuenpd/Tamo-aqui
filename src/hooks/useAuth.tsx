@@ -11,7 +11,9 @@ export interface Profile {
   full_name: string;
   district?: string;
   avatar_url?: string;
-  points: number; // certifique-se de que a coluna "points" existe em public.profiles (default 0)
+  banner_url?: string;
+  bio?: string;
+  points: number;
 }
 
 interface SignUpParams {
@@ -27,6 +29,7 @@ interface UpdateProfileParams {
   fullName: string;
   username: string;
   district?: string;
+  bio?: string;
 }
 
 interface AuthContextType {
@@ -41,6 +44,7 @@ interface AuthContextType {
   updateProfile: (params: UpdateProfileParams) => Promise<{ error: string | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
   updateAvatar: (file: File) => Promise<{ error: string | null }>;
+  updateBanner: (file: File) => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,25 +64,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .single();
 
     if (error) {
-      // Se cair aqui com "no rows" (PGRST116), o profile não existe na tabela
-      // (trigger de criação ausente/falhou) ou a policy de SELECT do RLS
-      // está bloqueando o próprio usuário de ler sua linha.
       console.error("Erro ao buscar profile:", error.message);
       setProfile(null);
       return;
     }
+
     setProfile(data as Profile);
   }, []);
 
-  // Limpa qualquer token de sessão inválido salvo no localStorage.
-  // Isso é o que evita o loading infinito quando o refresh token expirou
-  // ou foi revogado (AuthApiError: Invalid Refresh Token).
   const clearStaleSession = useCallback(async () => {
     try {
       await supabase.auth.signOut({ scope: "local" });
     } catch {
-      // Mesmo se o signOut falhar (ex: já não há sessão no servidor),
-      // ainda assim garantimos que o estado local fique limpo.
+      // A sessão local é limpa abaixo mesmo se o servidor já não a reconhecer.
     }
     setSession(null);
     setUser(null);
@@ -93,8 +91,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data, error } = await supabase.auth.getSession();
 
         if (error) {
-          // Cobre especificamente "Invalid Refresh Token: Refresh Token Not Found"
-          // e qualquer outro erro de recuperação de sessão.
           console.warn("Sessão inválida, limpando:", error.message);
           await clearStaleSession();
           return;
@@ -107,10 +103,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (data.session?.user) {
           await fetchProfile(data.session.user.id);
+        } else {
+          setProfile(null);
         }
       } catch (err) {
-        // Rede fora do ar, resposta malformada, etc — nunca deixamos
-        // isso travar o app em loading eterno.
         console.error("Falha ao inicializar sessão:", err);
         await clearStaleSession();
       } finally {
@@ -124,9 +120,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!mounted) return;
 
       if (event === "TOKEN_REFRESHED" && !newSession) {
-        // Refresh falhou (token revogado/expirado) — limpa e segue.
         await clearStaleSession();
-        setLoading(false);
+        if (mounted) setLoading(false);
         return;
       }
 
@@ -139,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null);
       }
 
-      setLoading(false);
+      if (mounted) setLoading(false);
     });
 
     return () => {
@@ -148,10 +143,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchProfile, clearStaleSession]);
 
-  // ── Cadastro ──────────────────────────────────────────────────────────────
-  // Recebe um único objeto de parâmetros — precisa bater com a chamada
-  // feita em SignUpScreen (App.tsx): signUp({ email, password, username, ... }).
-  const signUp: AuthContextType["signUp"] = async ({ email, password, username, fullName, district, role }) => {
+  const signUp: AuthContextType["signUp"] = async ({
+    email,
+    password,
+    username,
+    fullName,
+    district,
+    role,
+  }) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -167,8 +166,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) return { error: error.message };
 
-    // Se a confirmação de e-mail estiver ativa no projeto, não haverá
-    // session ainda — sinalizamos isso pra UI mostrar a tela de "confirme seu e-mail".
     const stillNeedsConfirmation = !!(data.user && !data.session);
     if (stillNeedsConfirmation) setNeedsConfirmation(true);
 
@@ -181,70 +178,123 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-    setSession(null);
-    setUser(null);
-    setProfile(null);
+  // Logout explícito: encerra a sessão no servidor e também remove a sessão local.
+  const signOut: AuthContextType["signOut"] = async () => {
+    try {
+      const { error } = await supabase.auth.signOut({ scope: "global" });
+
+      if (error) {
+        console.error("Erro ao sair da conta:", error.message);
+      }
+    } finally {
+      // Mesmo que o servidor retorne erro, não deixamos a UI continuar autenticada.
+      try {
+        await supabase.auth.signOut({ scope: "local" });
+      } catch {
+        // Ignora: o estado abaixo garante a saída visual.
+      }
+
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setNeedsConfirmation(false);
+    }
   };
 
-  // ── Atualização de perfil (nome, usuário, bairro) ───────────────────────────
-  const updateProfile: AuthContextType["updateProfile"] = async ({ fullName, username, district }) => {
+  const updateProfile: AuthContextType["updateProfile"] = async ({
+    fullName,
+    username,
+    district,
+    bio,
+  }) => {
     if (!user) return { error: "Usuário não autenticado." };
 
-    const { error } = await supabase
+    const cleanBio = (bio ?? "").trim().slice(0, 180);
+
+    const { data, error } = await supabase
       .from("profiles")
-      .update({ full_name: fullName, username, district })
-      .eq("id", user.id);
+      .update({
+        full_name: fullName.trim(),
+        username: username.trim(),
+        district: district?.trim() || null,
+        bio: cleanBio,
+      })
+      .eq("id", user.id)
+      .select("*")
+      .single();
 
     if (error) return { error: error.message };
 
-    setProfile((prev) => (prev ? { ...prev, full_name: fullName, username, district } : prev));
+    setProfile(data as Profile);
     return { error: null };
   };
 
-  // ── Troca de senha ───────────────────────────────────────────────────────
   const updatePassword: AuthContextType["updatePassword"] = async (newPassword) => {
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) return { error: error.message };
     return { error: null };
   };
 
-  // ── Upload de avatar ─────────────────────────────────────────────────────
-  // Assume um bucket de Storage chamado "avatars" com policy de upload/leitura
-  // liberada para o próprio usuário autenticado (auth.uid() = pasta do path).
-  const updateAvatar: AuthContextType["updateAvatar"] = async (file) => {
+  const uploadProfileImage = async (
+    file: File,
+    kind: "avatar" | "banner"
+  ): Promise<{ error: string | null }> => {
     if (!user) return { error: "Usuário não autenticado." };
 
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${user.id}/avatar.${ext}`;
+    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const bucket = "profile-images";
+    const path = `${user.id}/${kind}.${ext}`;
 
     const { error: uploadError } = await supabase.storage
-      .from("avatars")
-      .upload(path, file, { upsert: true, contentType: file.type });
+      .from(bucket)
+      .upload(path, file, {
+        upsert: true,
+        contentType: file.type,
+      });
 
     if (uploadError) return { error: uploadError.message };
 
-    const { data: publicUrlData } = supabase.storage.from("avatars").getPublicUrl(path);
-    // cache-busting pra imagem atualizar na hora, sem precisar dar hard refresh
-    const avatarUrl = `${publicUrlData.publicUrl}?t=${Date.now()}`;
+    const { data: publicUrlData } = supabase.storage
+      .from(bucket)
+      .getPublicUrl(path);
 
-    const { error: updateError } = await supabase
+    const publicUrl = `${publicUrlData.publicUrl}?t=${Date.now()}`;
+    const column = kind === "avatar" ? "avatar_url" : "banner_url";
+
+    const { data, error: updateError } = await supabase
       .from("profiles")
-      .update({ avatar_url: avatarUrl })
-      .eq("id", user.id);
+      .update({ [column]: publicUrl })
+      .eq("id", user.id)
+      .select("*")
+      .single();
 
     if (updateError) return { error: updateError.message };
 
-    setProfile((prev) => (prev ? { ...prev, avatar_url: avatarUrl } : prev));
+    setProfile(data as Profile);
     return { error: null };
   };
+
+  const updateAvatar: AuthContextType["updateAvatar"] = async (file) =>
+    uploadProfileImage(file, "avatar");
+
+  const updateBanner: AuthContextType["updateBanner"] = async (file) =>
+    uploadProfileImage(file, "banner");
 
   return (
     <AuthContext.Provider
       value={{
-        session, user, profile, loading, needsConfirmation,
-        signUp, signIn, signOut, updateProfile, updatePassword, updateAvatar,
+        session,
+        user,
+        profile,
+        loading,
+        needsConfirmation,
+        signUp,
+        signIn,
+        signOut,
+        updateProfile,
+        updatePassword,
+        updateAvatar,
+        updateBanner,
       }}
     >
       {children}

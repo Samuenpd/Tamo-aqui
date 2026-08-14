@@ -131,7 +131,7 @@ function WelcomeScreen({ onChoose, dark, onToggleDark }: { onChoose: (r: Role) =
       </div>
 
       <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="text-xs text-muted-foreground mt-10 text-center">
-        Versão 2.5 · Secretaria de Serviços Urbanos
+        Versão 2.5.2 · Secretaria de Serviços Urbanos
       </motion.p>
     </div>
   );
@@ -1719,7 +1719,19 @@ function AuthenticatedApp({ profile }: { profile: Profile }) {
   useEffect(() => { fetchNotifications(profile.id).then(setNotifs); }, [profile.id]);
 
   const onToggleDark = () => setDark((d) => !d);
-  const onLogout = () => { signOut(); };
+  const onLogout = async () => {
+    try {
+      const result = await signOut();
+      if (result && typeof result === "object" && "error" in result && result.error) {
+        console.error("Erro ao sair da conta:", result.error);
+        return;
+      }
+      // Garante que a sessão/estado do Supabase e o estado local do React sejam limpos.
+      window.location.replace(window.location.origin);
+    } catch (error) {
+      console.error("Erro ao sair da conta:", error);
+    }
+  };
   const onMarkAllRead = async () => {
     await markAllNotificationsRead(profile.id);
     setNotifs((n) => n.map((x) => ({ ...x, read: true })));
