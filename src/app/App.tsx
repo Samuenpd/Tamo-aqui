@@ -400,7 +400,7 @@ function SignUpScreen({ onSuccess, onBack, dark, onToggleDark }: {
             <Users size={28} className="text-white" />
           </div>
           <h1 className="text-2xl font-black text-foreground">Criar Conta</h1>
-          <p className="text-sm text-muted-foreground mt-1">Junte-se à comunidade TamoAqui</p>
+          <p className="text-sm text-muted-foreground mt-1">Junte-se à comunidade CidadeConnect</p>
         </div>
 
         {/* Step indicator */}
@@ -580,20 +580,20 @@ function CommentSheet({ post, onClose, onAddComment }: { post: Post; onClose: ()
 
 // ─── Post Card ────────────────────────────────────────────────────────────────
 
-function PostCard({ post, onToggleLike, onToggleSave, onOpenComments }: { post: Post; onToggleLike: (id: number) => void; onToggleSave: (id: number) => void; onOpenComments: (p: Post) => void }) {
+function PostCard({ post, onToggleLike, onToggleSave, onOpenComments, onOpenProfile }: { post: Post; onToggleLike: (id: number) => void; onToggleSave: (id: number) => void; onOpenComments: (p: Post) => void; onOpenProfile?: (username: string) => void }) {
   const prob = PROBLEM_TYPES.find((t) => t.id === post.problemType)!;
   return (
     <motion.article initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-3">
+        <button onClick={() => onOpenProfile?.(post.user)} className="flex items-center gap-3 text-left">
           <div className="w-9 h-9 rounded-full overflow-hidden" style={{ outline: `2px solid ${prob.color}`, outlineOffset: "2px" }}>
             <img src={post.avatar} alt={post.user} className="w-full h-full object-cover" />
           </div>
           <div>
-            <p className="text-sm font-bold text-foreground leading-none mb-0.5">@{post.user}</p>
+            <p className="text-sm font-bold text-foreground leading-none mb-0.5 hover:underline">@{post.user}</p>
             <div className="flex items-center gap-1 text-muted-foreground"><MapPin size={10} /><span className="text-xs">{post.location}</span></div>
           </div>
-        </div>
+        </button>
         <StatusBadge status={post.status} />
       </div>
       <div className="mx-4 mb-3 px-3 py-2 rounded-xl flex items-center gap-2" style={{ backgroundColor: `${prob.color}15`, borderLeft: `3px solid ${prob.color}` }}>
@@ -621,7 +621,7 @@ function PostCard({ post, onToggleLike, onToggleSave, onOpenComments }: { post: 
         </button>
       </div>
       <div className="px-4 pb-4">
-        <p className="text-sm text-foreground leading-relaxed"><span className="font-bold mr-1">@{post.user}</span>{post.caption}</p>
+        <p className="text-sm text-foreground leading-relaxed"><button onClick={() => onOpenProfile?.(post.user)} className="font-bold mr-1 hover:underline">@{post.user}</button>{post.caption}</p>
         <button onClick={() => onOpenComments(post)} className="text-xs text-muted-foreground mt-1 hover:text-primary transition-colors">Ver todos os {post.comments.length} comentários</button>
         <p className="text-xs text-muted-foreground mt-1">{post.time} atrás</p>
       </div>
@@ -695,7 +695,7 @@ function CreatePostModal({ onClose, onPost }: { onClose: () => void; onPost: (p:
 
 // ─── Explore Tab ──────────────────────────────────────────────────────────────
 
-function ExploreTab({ posts, onOpenComments }: { posts: Post[]; onOpenComments: (p: Post) => void }) {
+function ExploreTab({ posts, onOpenComments, onOpenProfile }: { posts: Post[]; onOpenComments: (p: Post) => void; onOpenProfile?: (username: string) => void }) {
   const [query, setQuery] = useState("");
   const [fs, setFs] = useState<PostStatus | "todos">("todos");
   const [fp, setFp] = useState<ProblemId | "todos">("todos");
@@ -764,7 +764,7 @@ function ExploreTab({ posts, onOpenComments }: { posts: Post[]; onOpenComments: 
             <div key={p.id} className="flex items-center gap-3 bg-muted/40 rounded-xl p-3">
               <img src={p.image} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-foreground">@{p.user}</p>
+                <button onClick={() => onOpenProfile?.(p.user)} className="text-xs font-bold text-foreground hover:underline">@{p.user}</button>
                 <p className="text-xs text-muted-foreground truncate">{p.caption.slice(0, 50)}…</p>
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap"><ProblemBadge typeId={p.problemType} /><StatusBadge status={p.status} /></div>
               </div>
@@ -908,6 +908,8 @@ function ProfileBanner({
 
 // ─── Profile Tab ──────────────────────────────────────────────────────────────
 
+const CURRENT_USERNAME = "joao_cidadao";
+
 function ProfileTab({
   posts,
   onLogout,
@@ -915,6 +917,9 @@ function ProfileTab({
   bannerUrl,
   onChangeAvatar,
   onChangeBanner,
+  viewedUsername,
+  onBack,
+  onOpenProfile,
 }: {
   posts: Post[];
   onLogout: () => void;
@@ -922,37 +927,78 @@ function ProfileTab({
   bannerUrl?: string | null;
   onChangeAvatar?: (file: File) => void;
   onChangeBanner?: (file: File) => void;
+  viewedUsername?: string | null; // undefined/null = mostra o próprio perfil
+  onBack?: () => void;
+  onOpenProfile?: (username: string) => void;
 }) {
   const [pTab, setPTab] = useState<"posts" | "saved">("posts");
   const [view, setView] = useState<"grid" | "list">("grid");
-  const myPosts   = posts.slice(0, 6);
-  const saved     = posts.filter((p) => p.saved);
-  const display   = pTab === "saved" ? saved : myPosts;
-  const resolved  = myPosts.filter((p) => p.status === "resolvido").length;
-  const totalLikes= myPosts.reduce((a, p) => a + p.likes, 0);
+  const [following, setFollowing] = useState(false);
+
+  const isOwnProfile   = !viewedUsername || viewedUsername === CURRENT_USERNAME;
+  const targetUsername = viewedUsername || CURRENT_USERNAME;
+
+  // Perfil próprio: usa os posts "recentes" como antes (mock local).
+  // Perfil de terceiros: filtra só as ocorrências daquele usuário.
+  const userPosts   = isOwnProfile ? posts.slice(0, 6) : posts.filter((p) => p.user === targetUsername);
+  const saved       = posts.filter((p) => p.saved);
+  const display     = isOwnProfile ? (pTab === "saved" ? saved : userPosts) : userPosts;
+  const resolved    = userPosts.filter((p) => p.status === "resolvido").length;
+  const totalLikes  = userPosts.reduce((a, p) => a + p.likes, 0);
+  const otherAvatar = userPosts[0]?.avatar ?? null;
+  const otherDistrict = userPosts[0]?.district;
 
   return (
     <div>
-      <ProfileBanner url={bannerUrl} editable onChangeFile={onChangeBanner} />
+      {!isOwnProfile && (
+        <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-bold text-muted-foreground hover:text-foreground transition-colors mb-3">
+          <ChevronRight size={16} className="rotate-180" />Voltar
+        </button>
+      )}
+      <ProfileBanner url={isOwnProfile ? bannerUrl : null} editable={isOwnProfile} onChangeFile={onChangeBanner} />
       <div className="flex items-end gap-4 -mt-10 mb-4 px-1">
-        <ProfileAvatar url={avatarUrl} size={80} editable onChangeFile={onChangeAvatar} />
-        <div className="flex-1 pb-1"><h2 className="text-base font-black text-foreground leading-none">João Cidadão</h2><p className="text-xs text-muted-foreground mt-0.5">@joao_cidadao · São Paulo, SP</p></div>
-        <button className="p-2 rounded-xl bg-muted text-muted-foreground pb-2"><Settings size={16} /></button>
+        <ProfileAvatar url={isOwnProfile ? avatarUrl : otherAvatar} size={80} editable={isOwnProfile} onChangeFile={onChangeAvatar} />
+        <div className="flex-1 pb-1">
+          <h2 className="text-base font-black text-foreground leading-none">{isOwnProfile ? "João Cidadão" : `@${targetUsername}`}</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">@{targetUsername}{isOwnProfile ? " · São Paulo, SP" : otherDistrict ? ` · ${otherDistrict}` : ""}</p>
+        </div>
+        {isOwnProfile ? (
+          <button className="p-2 rounded-xl bg-muted text-muted-foreground pb-2"><Settings size={16} /></button>
+        ) : (
+          <button
+            onClick={() => setFollowing((f) => !f)}
+            className="px-4 py-2 rounded-xl text-xs font-bold transition-all"
+            style={following ? { backgroundColor: "var(--muted)", color: "var(--muted-foreground)" } : { backgroundColor: "#f97316", color: "#0f0f0f" }}
+          >
+            {following ? "Seguindo" : "Seguir"}
+          </button>
+        )}
       </div>
-      <p className="text-sm text-foreground leading-relaxed mb-4 px-1">Cidadão engajado, reportando problemas urbanos para construir uma cidade melhor. 🏙️</p>
+      {isOwnProfile && <p className="text-sm text-foreground leading-relaxed mb-4 px-1">Cidadão engajado, reportando problemas urbanos para construir uma cidade melhor. 🏙️</p>}
       <div className="grid grid-cols-4 gap-2 mb-5">
-        {[{ label: "Reportes", value: myPosts.length, icon: AlertTriangle, color: "#f97316" }, { label: "Resolvidos", value: resolved, icon: CheckCircle, color: "#22c55e" }, { label: "Curtidas", value: totalLikes, icon: Heart, color: "#ef4444" }, { label: "Pontos", value: 2480, icon: Award, color: "#a78bfa" }].map(({ label, value, icon: Icon, color }) => (
+        {[{ label: "Reportes", value: userPosts.length, icon: AlertTriangle, color: "#f97316" }, { label: "Resolvidos", value: resolved, icon: CheckCircle, color: "#22c55e" }, { label: "Curtidas", value: totalLikes, icon: Heart, color: "#ef4444" }, { label: "Pontos", value: isOwnProfile ? 2480 : userPosts.length * 40, icon: Award, color: "#a78bfa" }].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-muted rounded-xl p-2.5 flex flex-col items-center gap-1"><Icon size={14} style={{ color }} /><p className="text-base font-black text-foreground leading-none">{value}</p><p className="text-xs text-muted-foreground font-semibold text-center">{label}</p></div>
         ))}
       </div>
-      <div className="flex items-center gap-1 mb-4 bg-muted rounded-xl p-1">
-        {(["posts", "saved"] as const).map((t) => <button key={t} onClick={() => setPTab(t)} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${pTab === t ? "" : "text-muted-foreground"}`} style={pTab === t ? { backgroundColor: "#f97316", color: "#0f0f0f" } : {}}>{t === "posts" ? "Meus Reportes" : "Salvos"}</button>)}
-        <div className="flex gap-1 ml-1">
-          <button onClick={() => setView("grid")} className={`p-1.5 rounded-lg ${view === "grid" ? "text-primary" : "text-muted-foreground"}`}><Grid size={14} /></button>
-          <button onClick={() => setView("list")} className={`p-1.5 rounded-lg ${view === "list" ? "text-primary" : "text-muted-foreground"}`}><List size={14} /></button>
+      {isOwnProfile && (
+        <div className="flex items-center gap-1 mb-4 bg-muted rounded-xl p-1">
+          {(["posts", "saved"] as const).map((t) => <button key={t} onClick={() => setPTab(t)} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${pTab === t ? "" : "text-muted-foreground"}`} style={pTab === t ? { backgroundColor: "#f97316", color: "#0f0f0f" } : {}}>{t === "posts" ? "Meus Reportes" : "Salvos"}</button>)}
+          <div className="flex gap-1 ml-1">
+            <button onClick={() => setView("grid")} className={`p-1.5 rounded-lg ${view === "grid" ? "text-primary" : "text-muted-foreground"}`}><Grid size={14} /></button>
+            <button onClick={() => setView("list")} className={`p-1.5 rounded-lg ${view === "list" ? "text-primary" : "text-muted-foreground"}`}><List size={14} /></button>
+          </div>
         </div>
-      </div>
-      {display.length === 0 ? <div className="text-center py-10 text-muted-foreground"><Bookmark size={32} className="mx-auto mb-2 opacity-30" /><p className="text-sm font-semibold">Nenhuma ocorrência salva</p></div>
+      )}
+      {!isOwnProfile && (
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Reportes de @{targetUsername}</p>
+          <div className="flex gap-1">
+            <button onClick={() => setView("grid")} className={`p-1.5 rounded-lg ${view === "grid" ? "text-primary" : "text-muted-foreground"}`}><Grid size={14} /></button>
+            <button onClick={() => setView("list")} className={`p-1.5 rounded-lg ${view === "list" ? "text-primary" : "text-muted-foreground"}`}><List size={14} /></button>
+          </div>
+        </div>
+      )}
+      {display.length === 0 ? <div className="text-center py-10 text-muted-foreground"><Bookmark size={32} className="mx-auto mb-2 opacity-30" /><p className="text-sm font-semibold">{isOwnProfile ? "Nenhuma ocorrência salva" : "Nenhuma ocorrência ainda"}</p></div>
       : view === "grid" ? (
         <div className="grid grid-cols-3 gap-1.5">
           {display.map((p) => { const pr = PROBLEM_TYPES.find((t) => t.id === p.problemType)!; return (
@@ -973,7 +1019,9 @@ function ProfileTab({
           ))}
         </div>
       )}
-      <div className="mt-8 pt-4 border-t border-border"><button onClick={onLogout} className="flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-destructive transition-colors"><LogOut size={16} />Sair da conta</button></div>
+      {isOwnProfile && (
+        <div className="mt-8 pt-4 border-t border-border"><button onClick={onLogout} className="flex items-center gap-2 text-sm font-bold text-muted-foreground hover:text-destructive transition-colors"><LogOut size={16} />Sair da conta</button></div>
+      )}
     </div>
   );
 }
@@ -1083,7 +1131,7 @@ function PrefeituraDashboard({ posts, dark, onToggleDark, onLogout, onUpdateStat
           </div>
           <div>
             <p className="text-sm font-black text-foreground leading-none">Painel da Prefeitura</p>
-            <p className="text-xs" style={{ color: "#f97316" }}>TamoAqui · Secretaria de Serviços Urbanos</p>
+            <p className="text-xs" style={{ color: "#f97316" }}>CidadeConnect · Secretaria de Serviços Urbanos</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -1285,13 +1333,10 @@ function CidadaoApp({ posts, dark, onToggleDark, onLogout, setPosts }: { posts: 
   const [filterType,  setFilterType]  = useState<ProblemId | "todos">("todos");
   const [commentPost, setCommentPost] = useState<Post | null>(null);
   const [notifs,      setNotifs]      = useState(INITIAL_NOTIFS);
-  const [avatarUrl,   setAvatarUrl]   = useState<string | null>(null);
-  const [bannerUrl,   setBannerUrl]   = useState<string | null>(null);
+  const [viewedUsername, setViewedUsername] = useState<string | null>(null);
 
-  // Preview local só pra visual — troque por upload real pro Supabase
-  // Storage e persistência em profiles.avatar_url / profiles.banner_url.
-  const changeAvatar = (file: File) => setAvatarUrl(URL.createObjectURL(file));
-  const changeBanner = (file: File) => setBannerUrl(URL.createObjectURL(file));
+  const openProfile = (username: string) => { setViewedUsername(username); setActiveTab("perfil"); };
+  const backToOwnProfile = () => setViewedUsername(null);
 
   const toggleLike = (id: number) => setPosts((p) => p.map((x) => x.id === id ? { ...x, liked: !x.liked } : x));
   const toggleSave = (id: number) => setPosts((p) => p.map((x) => x.id === id ? { ...x, saved: !x.saved } : x));
@@ -1320,11 +1365,11 @@ function CidadaoApp({ posts, dark, onToggleDark, onLogout, setPosts }: { posts: 
           <div className="px-3 mb-6">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#f97316" }}><span className="text-sm font-black" style={{ color: "#0f0f0f" }}>P</span></div>
-              <div><p className="text-sm font-black text-foreground leading-none">Prefeitura</p><p className="text-xs font-semibold" style={{ color: "#f97316" }}>TamoAqui</p></div>
+              <div><p className="text-sm font-black text-foreground leading-none">Prefeitura</p><p className="text-xs font-semibold" style={{ color: "#f97316" }}>CidadeConnect</p></div>
             </div>
           </div>
           {NAV.map(({ id, label, icon: Icon, badge }) => (
-            <button key={id} onClick={() => setActiveTab(id)} className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === id ? "" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`} style={activeTab === id ? { backgroundColor: "#f97316", color: "#0f0f0f" } : {}}>
+            <button key={id} onClick={() => { setActiveTab(id); if (id === "perfil") setViewedUsername(null); }} className={`relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === id ? "" : "text-muted-foreground hover:text-foreground hover:bg-muted"}`} style={activeTab === id ? { backgroundColor: "#f97316", color: "#0f0f0f" } : {}}>
               <Icon size={18} />{label}
               {badge ? <span className="ml-auto text-xs font-black px-1.5 py-0.5 rounded-full" style={{ backgroundColor: activeTab === id ? "#0f0f0f" : "#f97316", color: activeTab === id ? "#f97316" : "#0f0f0f" }}>{badge}</span> : null}
             </button>
@@ -1353,11 +1398,11 @@ function CidadaoApp({ posts, dark, onToggleDark, onLogout, setPosts }: { posts: 
                 <button onClick={() => setFilterType("todos")} className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 ${filterType === "todos" ? "" : "bg-muted text-muted-foreground"}`} style={filterType === "todos" ? { backgroundColor: "#f97316", color: "#0f0f0f" } : {}}>Todos</button>
                 {PROBLEM_TYPES.map((t) => <button key={t.id} onClick={() => setFilterType(t.id as ProblemId)} className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 flex items-center gap-1.5 ${filterType === t.id ? "" : "bg-muted text-muted-foreground"}`} style={filterType === t.id ? { backgroundColor: `${t.color}20`, color: t.color, border: `1px solid ${t.color}40` } : {}}><t.icon size={11} />{t.label}</button>)}
               </div>
-              <div className="space-y-5">{filtered.map((p) => <PostCard key={p.id} post={p} onToggleLike={toggleLike} onToggleSave={toggleSave} onOpenComments={setCommentPost} />)}</div>
+              <div className="space-y-5">{filtered.map((p) => <PostCard key={p.id} post={p} onToggleLike={toggleLike} onToggleSave={toggleSave} onOpenComments={setCommentPost} onOpenProfile={openProfile} />)}</div>
             </>}
-            {activeTab === "buscar" && <ExploreTab posts={posts} onOpenComments={setCommentPost} />}
+            {activeTab === "buscar" && <ExploreTab posts={posts} onOpenComments={setCommentPost} onOpenProfile={openProfile} />}
             {activeTab === "notif"  && <NotifTab notifs={notifs} onMarkAll={markAllRead} />}
-            {activeTab === "perfil" && <ProfileTab posts={posts} onLogout={onLogout} avatarUrl={avatarUrl} bannerUrl={bannerUrl} onChangeAvatar={changeAvatar} onChangeBanner={changeBanner} />}
+            {activeTab === "perfil" && <ProfileTab posts={posts} onLogout={onLogout} viewedUsername={viewedUsername} onBack={backToOwnProfile} onOpenProfile={openProfile} />}
           </div>
         </main>
 
@@ -1380,7 +1425,7 @@ function CidadaoApp({ posts, dark, onToggleDark, onLogout, setPosts }: { posts: 
       {/* Mobile */}
       <div className="md:hidden flex flex-col h-screen">
         <header className="border-b border-border px-4 py-3 flex items-center justify-between shrink-0" style={{ backgroundColor: "var(--card)" }}>
-          <div className="flex items-center gap-2"><div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#f97316" }}><span className="text-xs font-black" style={{ color: "#0f0f0f" }}>P</span></div><span className="text-sm font-black text-foreground">TamoAqui</span></div>
+          <div className="flex items-center gap-2"><div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#f97316" }}><span className="text-xs font-black" style={{ color: "#0f0f0f" }}>P</span></div><span className="text-sm font-black text-foreground">CidadeConnect</span></div>
           <div className="flex items-center gap-2"><button onClick={onToggleDark} className="text-muted-foreground p-1">{dark ? <Sun size={20} /> : <Moon size={20} />}</button><button onClick={() => setShowModal(true)} className="text-primary"><PlusSquare size={24} /></button></div>
         </header>
         <main className="flex-1 overflow-y-auto scrollbar-hide">
@@ -1391,16 +1436,16 @@ function CidadaoApp({ posts, dark, onToggleDark, onLogout, setPosts }: { posts: 
                 <button onClick={() => setFilterType("todos")} className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 ${filterType === "todos" ? "" : "bg-muted text-muted-foreground"}`} style={filterType === "todos" ? { backgroundColor: "#f97316", color: "#0f0f0f" } : {}}>Todos</button>
                 {PROBLEM_TYPES.map((t) => <button key={t.id} onClick={() => setFilterType(t.id as ProblemId)} className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 flex items-center gap-1 ${filterType === t.id ? "" : "bg-muted text-muted-foreground"}`} style={filterType === t.id ? { backgroundColor: `${t.color}20`, color: t.color } : {}}><t.icon size={10} />{t.label}</button>)}
               </div>
-              <div className="space-y-4">{filtered.map((p) => <PostCard key={p.id} post={p} onToggleLike={toggleLike} onToggleSave={toggleSave} onOpenComments={setCommentPost} />)}</div>
+              <div className="space-y-4">{filtered.map((p) => <PostCard key={p.id} post={p} onToggleLike={toggleLike} onToggleSave={toggleSave} onOpenComments={setCommentPost} onOpenProfile={openProfile} />)}</div>
             </>}
-            {activeTab === "buscar" && <ExploreTab posts={posts} onOpenComments={setCommentPost} />}
+            {activeTab === "buscar" && <ExploreTab posts={posts} onOpenComments={setCommentPost} onOpenProfile={openProfile} />}
             {activeTab === "notif"  && <NotifTab notifs={notifs} onMarkAll={markAllRead} />}
-            {activeTab === "perfil" && <ProfileTab posts={posts} onLogout={onLogout} avatarUrl={avatarUrl} bannerUrl={bannerUrl} onChangeAvatar={changeAvatar} onChangeBanner={changeBanner} />}
+            {activeTab === "perfil" && <ProfileTab posts={posts} onLogout={onLogout} viewedUsername={viewedUsername} onBack={backToOwnProfile} onOpenProfile={openProfile} />}
           </div>
         </main>
         <nav className="border-t border-border flex items-center justify-around py-3 px-4 shrink-0" style={{ backgroundColor: "var(--card)" }}>
           {NAV.map(({ id, icon: Icon, badge }) => (
-            <button key={id} onClick={() => setActiveTab(id)} className={`relative p-2 rounded-xl ${activeTab === id ? "text-primary" : "text-muted-foreground"}`}>
+            <button key={id} onClick={() => { setActiveTab(id); if (id === "perfil") setViewedUsername(null); }} className={`relative p-2 rounded-xl ${activeTab === id ? "text-primary" : "text-muted-foreground"}`}>
               <Icon size={22} strokeWidth={activeTab === id ? 2.5 : 1.5} />
               {badge ? <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-xs font-black flex items-center justify-center" style={{ backgroundColor: "#f97316", color: "#0f0f0f" }}>{badge}</span> : null}
             </button>
