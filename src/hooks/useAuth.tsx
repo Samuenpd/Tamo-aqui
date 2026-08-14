@@ -2,15 +2,31 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 
-type Role = "cidadao" | "prefeitura";
+export type Role = "cidadao" | "prefeitura";
 
-interface Profile {
+export interface Profile {
   id: string;
   role: Role;
   username: string;
-  full_name?: string;
+  full_name: string;
   district?: string;
   avatar_url?: string;
+  points: number; // certifique-se de que a coluna "points" existe em public.profiles (default 0)
+}
+
+interface SignUpParams {
+  email: string;
+  password: string;
+  username: string;
+  fullName?: string;
+  district?: string;
+  role: Role;
+}
+
+interface UpdateProfileParams {
+  fullName: string;
+  username: string;
+  district?: string;
 }
 
 interface AuthContextType {
@@ -19,9 +35,12 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   needsConfirmation: boolean;
-  signUp: (email: string, password: string, extra: { role: Role; username: string; full_name?: string; district?: string }) => Promise<{ error: string | null }>;
+  signUp: (params: SignUpParams) => Promise<{ error: string | null; needsConfirmation?: boolean }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  updateProfile: (params: UpdateProfileParams) => Promise<{ error: string | null }>;
+  updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
+  updateAvatar: (file: File) => Promise<{ error: string | null }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -41,6 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .single();
 
     if (error) {
+      // Se cair aqui com "no rows" (PGRST116), o profile não existe na tabela
+      // (trigger de criação ausente/falhou) ou a policy de SELECT do RLS
+      // está bloqueando o próprio usuário de ler sua linha.
       console.error("Erro ao buscar profile:", error.message);
       setProfile(null);
       return;
@@ -126,16 +148,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchProfile, clearStaleSession]);
 
-  const signUp: AuthContextType["signUp"] = async (email, password, extra) => {
+  // ── Cadastro ──────────────────────────────────────────────────────────────
+  // Recebe um único objeto de parâmetros — precisa bater com a chamada
+  // feita em SignUpScreen (App.tsx): signUp({ email, password, username, ... }).
+  const signUp: AuthContextType["signUp"] = async ({ email, password, username, fullName, district, role }) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          role: extra.role,
-          username: extra.username,
-          full_name: extra.full_name,
-          district: extra.district,
+          role,
+          username,
+          full_name: fullName,
+          district,
         },
       },
     });
@@ -144,11 +169,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Se a confirmação de e-mail estiver ativa no projeto, não haverá
     // session ainda — sinalizamos isso pra UI mostrar a tela de "confirme seu e-mail".
-    if (data.user && !data.session) {
-      setNeedsConfirmation(true);
-    }
+    const stillNeedsConfirmation = !!(data.user && !data.session);
+    if (stillNeedsConfirmation) setNeedsConfirmation(true);
 
-    return { error: null };
+    return { error: null, needsConfirmation: stillNeedsConfirmation };
   };
 
   const signIn: AuthContextType["signIn"] = async (email, password) => {
@@ -164,9 +188,64 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   };
 
+  // ── Atualização de perfil (nome, usuário, bairro) ───────────────────────────
+  const updateProfile: AuthContextType["updateProfile"] = async ({ fullName, username, district }) => {
+    if (!user) return { error: "Usuário não autenticado." };
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ full_name: fullName, username, district })
+      .eq("id", user.id);
+
+    if (error) return { error: error.message };
+
+    setProfile((prev) => (prev ? { ...prev, full_name: fullName, username, district } : prev));
+    return { error: null };
+  };
+
+  // ── Troca de senha ───────────────────────────────────────────────────────
+  const updatePassword: AuthContextType["updatePassword"] = async (newPassword) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) return { error: error.message };
+    return { error: null };
+  };
+
+  // ── Upload de avatar ─────────────────────────────────────────────────────
+  // Assume um bucket de Storage chamado "avatars" com policy de upload/leitura
+  // liberada para o próprio usuário autenticado (auth.uid() = pasta do path).
+  const updateAvatar: AuthContextType["updateAvatar"] = async (file) => {
+    if (!user) return { error: "Usuário não autenticado." };
+
+    const ext = file.name.split(".").pop() || "jpg";
+    const path = `${user.id}/avatar.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("avatars")
+      .upload(path, file, { upsert: true, contentType: file.type });
+
+    if (uploadError) return { error: uploadError.message };
+
+    const { data: publicUrlData } = supabase.storage.from("avatars").getPublicUrl(path);
+    // cache-busting pra imagem atualizar na hora, sem precisar dar hard refresh
+    const avatarUrl = `${publicUrlData.publicUrl}?t=${Date.now()}`;
+
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ avatar_url: avatarUrl })
+      .eq("id", user.id);
+
+    if (updateError) return { error: updateError.message };
+
+    setProfile((prev) => (prev ? { ...prev, avatar_url: avatarUrl } : prev));
+    return { error: null };
+  };
+
   return (
     <AuthContext.Provider
-      value={{ session, user, profile, loading, needsConfirmation, signUp, signIn, signOut }}
+      value={{
+        session, user, profile, loading, needsConfirmation,
+        signUp, signIn, signOut, updateProfile, updatePassword, updateAvatar,
+      }}
     >
       {children}
     </AuthContext.Provider>
