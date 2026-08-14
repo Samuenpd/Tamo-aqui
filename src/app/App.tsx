@@ -130,7 +130,7 @@ function WelcomeScreen({ onChoose, dark, onToggleDark }: { onChoose: (r: Role) =
       </div>
 
       <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="text-xs text-muted-foreground mt-10 text-center">
-        Versão 2.4.1 · Secretaria de Serviços Urbanos
+        Versão 2.4.3 · Secretaria de Serviços Urbanos
       </motion.p>
     </div>
   );
