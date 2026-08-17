@@ -131,7 +131,7 @@ function WelcomeScreen({ onChoose, dark, onToggleDark }: { onChoose: (r: Role) =
       </div>
 
       <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="text-xs text-muted-foreground mt-10 text-center">
-        Versão 2.5.2 · Secretaria de Serviços Urbanos
+        Versão 2.6 · Secretaria de Serviços Urbanos
       </motion.p>
     </div>
   );
@@ -148,6 +148,7 @@ function LoginScreen({ intentRole, onBack, onSignUp, dark, onToggleDark }: {
   const [showPass, setShowPass] = useState(false);
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
+  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem("tamoaqui-remember-me") !== "false");
 
   const isPrefeitura = intentRole === "prefeitura";
 
@@ -155,7 +156,8 @@ function LoginScreen({ intentRole, onBack, onSignUp, dark, onToggleDark }: {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const { error } = await signIn(email, password);
+    localStorage.setItem("tamoaqui-remember-me", String(rememberMe));
+    const { error } = await signIn(email, password, rememberMe);
     setLoading(false);
     if (error) setError(error);
     // Se der certo, o AuthProvider atualiza a sessão e o componente raiz troca de tela sozinho.
@@ -227,6 +229,19 @@ function LoginScreen({ intentRole, onBack, onSignUp, dark, onToggleDark }: {
               </button>
             </div>
           </div>
+
+          <label className="flex items-center gap-2 px-1 text-sm text-muted-foreground cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => {
+                setRememberMe(e.target.checked);
+                localStorage.setItem("tamoaqui-remember-me", String(e.target.checked));
+              }}
+              className="w-4 h-4 rounded accent-orange-500 cursor-pointer"
+            />
+            Lembrar de mim
+          </label>
 
           <AnimatePresence>
             {error && (
@@ -903,9 +918,7 @@ function SettingsModal({ profile, onClose, onLogout }: { profile: Profile; onClo
   const [fullName, setFullName] = useState(profile.full_name);
   const [username, setUsername] = useState(profile.username);
   const [district, setDistrict] = useState(profile.district ?? "");
-  const [bio, setBio] = useState(() => {
-    try { return localStorage.getItem(`tamoaqui:bio:${profile.id}`) ?? "Cidadão engajado, reportando problemas urbanos para construir uma cidade melhor. 🏙️"; } catch { return "Cidadão engajado, reportando problemas urbanos para construir uma cidade melhor. 🏙️"; }
-  });
+  const [bio, setBio] = useState(profile.bio ?? "");
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileSaved, setProfileSaved] = useState(false);
@@ -922,12 +935,10 @@ function SettingsModal({ profile, onClose, onLogout }: { profile: Profile; onClo
     if (!fullName.trim()) { setProfileError("Nome não pode ficar em branco."); return; }
     if (username.length < 3 || !/^[a-z0-9_]+$/.test(username)) { setProfileError("Usuário inválido (mín. 3 caracteres, letras minúsculas/números/_)."); return; }
     setSavingProfile(true);
-    try { localStorage.setItem(`tamoaqui:bio:${profile.id}`, bio.trim()); } catch { /* armazenamento indisponível */ }
-    const { error } = await updateProfile({ fullName, username, district });
+    const { error } = await updateProfile({ fullName, username, district, bio: bio.trim() });
     setSavingProfile(false);
     if (error) setProfileError(error);
     else {
-      try { window.dispatchEvent(new CustomEvent("tamoaqui:bio-updated", { detail: { profileId: profile.id, bio: bio.trim() } })); } catch { /* evento indisponível */ }
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 2500);
     }
@@ -1131,23 +1142,11 @@ function ProfileTab({
   const [cropFile, setCropFile] = useState<File | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [following, setFollowing] = useState(false);
-  const [bio, setBio] = useState(() => {
-    try { return localStorage.getItem(`tamoaqui:bio:${profile.id}`) ?? "Cidadão engajado, reportando problemas urbanos para construir uma cidade melhor. 🏙️"; } catch { return "Cidadão engajado, reportando problemas urbanos para construir uma cidade melhor. 🏙️"; }
-  });
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const isOwnProfile = !viewedUsername || viewedUsername === profile.username;
   const targetUsername = viewedUsername || profile.username;
 
-  useEffect(() => {
-    if (!isOwnProfile) return;
-    const handleBioUpdate = (event: Event) => {
-      const customEvent = event as CustomEvent<{ profileId: string; bio: string }>;
-      if (customEvent.detail?.profileId === profile.id) setBio(customEvent.detail.bio);
-    };
-    window.addEventListener("tamoaqui:bio-updated", handleBioUpdate);
-    return () => window.removeEventListener("tamoaqui:bio-updated", handleBioUpdate);
-  }, [isOwnProfile, profile.id]);
   const userPosts = isOwnProfile ? posts.filter((p) => p.userId === profile.id) : posts.filter((p) => p.user === targetUsername);
   const saved = posts.filter((p) => p.saved);
   const display = isOwnProfile ? (pTab === "saved" ? saved : userPosts) : userPosts;
@@ -1205,7 +1204,7 @@ function ProfileTab({
         )}
       </div>
       {avatarError && <p className="text-xs font-semibold text-destructive px-1 mb-3">{avatarError}</p>}
-      <p className="text-sm text-foreground leading-relaxed mb-4 px-1 whitespace-pre-wrap">{isOwnProfile ? bio : "Cidadão engajado, reportando problemas urbanos para construir uma cidade melhor. 🏙️"}</p>
+      <p className="text-sm text-foreground leading-relaxed mb-4 px-1 whitespace-pre-wrap">{isOwnProfile ? (profile.bio ?? "") : "Cidadão engajado, reportando problemas urbanos para construir uma cidade melhor. 🏙️"}</p>
       <div className="grid grid-cols-4 gap-2 mb-5">
         {[{ label: "Reportes", value: userPosts.length, icon: AlertTriangle, color: "#f97316" }, { label: "Resolvidos", value: resolved, icon: CheckCircle, color: "#22c55e" }, { label: "Curtidas", value: totalLikes, icon: Heart, color: "#ef4444" }, { label: "Pontos", value: isOwnProfile ? profile.points : userPosts.length * 40, icon: Award, color: "#a78bfa" }].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-muted rounded-xl p-2.5 flex flex-col items-center gap-1"><Icon size={14} style={{ color }} /><p className="text-base font-black text-foreground leading-none">{value}</p><p className="text-xs text-muted-foreground font-semibold text-center">{label}</p></div>
@@ -1537,19 +1536,25 @@ function CidadaoApp({ posts, setPosts, profile, notifs, onMarkAllRead, dark, onT
   const [commentPost, setCommentPost] = useState<UIPost | null>(null);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [viewedUsername, setViewedUsername] = useState<string | null>(null);
-  const [bannerUrl, setBannerUrl] = useState<string | null>(() => {
-    try { return localStorage.getItem(`tamoaqui:banner:${profile.id}`); } catch { return null; }
-  });
+  const { updateBanner } = useAuth();
+  const [bannerError, setBannerError] = useState("");
+  const [uploadingBanner, setUploadingBanner] = useState(false);
 
-  const handleBannerChange = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : null;
-      if (!result) return;
-      setBannerUrl(result);
-      try { localStorage.setItem(`tamoaqui:banner:${profile.id}`, result); } catch { /* storage cheio/bloqueado */ }
-    };
-    reader.readAsDataURL(file);
+  const handleBannerChange = async (file: File) => {
+    setBannerError("");
+    if (!file.type.startsWith("image/")) {
+      setBannerError("Selecione uma imagem válida.");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setBannerError("A imagem da capa deve ter no máximo 8 MB.");
+      return;
+    }
+
+    setUploadingBanner(true);
+    const { error } = await updateBanner(file);
+    setUploadingBanner(false);
+    if (error) setBannerError(error);
   };
 
   const openProfile = (username: string) => { setViewedUsername(username); setActiveTab("perfil"); };
@@ -1649,7 +1654,32 @@ function CidadaoApp({ posts, setPosts, profile, notifs, onMarkAllRead, dark, onT
             </>}
             {activeTab === "buscar" && <ExploreTab posts={posts} onOpenComments={openComments} onOpenProfile={openProfile} />}
             {activeTab === "notif"  && <NotifTab notifs={notifs} onMarkAll={onMarkAllRead} />}
-            {activeTab === "perfil" && <ProfileTab profile={profile} posts={posts} onLogout={onLogout} viewedUsername={viewedUsername} onBack={backToOwnProfile} bannerUrl={bannerUrl} onChangeBanner={handleBannerChange} />}
+            {activeTab === "perfil" && (
+              <>
+                <ProfileTab
+                  profile={profile}
+                  posts={posts}
+                  onLogout={onLogout}
+                  viewedUsername={viewedUsername}
+                  onBack={backToOwnProfile}
+                  bannerUrl={profile.banner_url}
+                  onChangeBanner={handleBannerChange}
+                />
+
+                {bannerError && (
+                  <p className="text-xs font-semibold text-destructive mt-2 px-1">
+                    {bannerError}
+                  </p>
+                )}
+
+                {uploadingBanner && (
+                  <p className="text-xs text-muted-foreground mt-2 px-1 flex items-center gap-1">
+                    <RefreshCw size={12} className="animate-spin" />
+                    Salvando capa…
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </main>
 
@@ -1685,7 +1715,32 @@ function CidadaoApp({ posts, setPosts, profile, notifs, onMarkAllRead, dark, onT
             </>}
             {activeTab === "buscar" && <ExploreTab posts={posts} onOpenComments={openComments} onOpenProfile={openProfile} />}
             {activeTab === "notif"  && <NotifTab notifs={notifs} onMarkAll={onMarkAllRead} />}
-            {activeTab === "perfil" && <ProfileTab profile={profile} posts={posts} onLogout={onLogout} viewedUsername={viewedUsername} onBack={backToOwnProfile} bannerUrl={bannerUrl} onChangeBanner={handleBannerChange} />}
+            {activeTab === "perfil" && (
+              <>
+                <ProfileTab
+                  profile={profile}
+                  posts={posts}
+                  onLogout={onLogout}
+                  viewedUsername={viewedUsername}
+                  onBack={backToOwnProfile}
+                  bannerUrl={profile.banner_url}
+                  onChangeBanner={handleBannerChange}
+                />
+
+                {bannerError && (
+                  <p className="text-xs font-semibold text-destructive mt-2 px-1">
+                    {bannerError}
+                  </p>
+                )}
+
+                {uploadingBanner && (
+                  <p className="text-xs text-muted-foreground mt-2 px-1 flex items-center gap-1">
+                    <RefreshCw size={12} className="animate-spin" />
+                    Salvando capa…
+                  </p>
+                )}
+              </>
+            )}
           </div>
         </main>
         <nav className="border-t border-border flex items-center justify-around py-3 px-4 shrink-0" style={{ backgroundColor: "var(--card)" }}>
@@ -1721,13 +1776,10 @@ function AuthenticatedApp({ profile }: { profile: Profile }) {
   const onToggleDark = () => setDark((d) => !d);
   const onLogout = async () => {
     try {
-      const result = await signOut();
-      if (result && typeof result === "object" && "error" in result && result.error) {
-        console.error("Erro ao sair da conta:", result.error);
-        return;
-      }
-      // Garante que a sessão/estado do Supabase e o estado local do React sejam limpos.
-      window.location.replace(window.location.origin);
+      // O AuthProvider limpa session/user/profile no próprio signOut().
+      // Não usamos window.location.replace aqui: a navegação para a tela
+      // de login é controlada pelo Root através do estado de autenticação.
+      await signOut();
     } catch (error) {
       console.error("Erro ao sair da conta:", error);
     }
@@ -1805,4 +1857,3 @@ export default function App() {
     </AuthProvider>
   );
 }
-//adf

@@ -39,7 +39,7 @@ interface AuthContextType {
   loading: boolean;
   needsConfirmation: boolean;
   signUp: (params: SignUpParams) => Promise<{ error: string | null; needsConfirmation?: boolean }>;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signIn: (email: string, password: string, rememberMe?: boolean) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   updateProfile: (params: UpdateProfileParams) => Promise<{ error: string | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
@@ -85,63 +85,192 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+    let initialized = false;
+
+    // Garante que o app nunca fique preso no loading por uma sessão/cache
+    // quebrado ou por uma chamada do Supabase que não responde.
+    const finishLoading = () => {
+      if (mounted) setLoading(false);
+    };
+
+    const clearLocalAuthStorage = () => {
+      try {
+        // O Supabase normalmente usa sb-<project-ref>-auth-token.
+        // Removemos apenas chaves relacionadas ao Auth, sem tocar nos dados
+        // da aplicação.
+        const keysToRemove: string[] = [];
+
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (
+            key &&
+            (key.startsWith("sb-") && key.includes("-auth-token"))
+          ) {
+            keysToRemove.push(key);
+          }
+        }
+
+        keysToRemove.forEach((key) => localStorage.removeItem(key));
+      } catch (err) {
+        console.warn("Não foi possível limpar o cache local do Auth:", err);
+      }
+    };
+
+    const resetAuthState = () => {
+      if (!mounted) return;
+
+      setSession(null);
+      setUser(null);
+      setProfile(null);
+      setNeedsConfirmation(false);
+      setLoading(false);
+    };
+
+    const runWithTimeout = async <T,>(promise: Promise<T>, timeoutMs = 10000): Promise<T> => {
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+      try {
+        return await Promise.race([
+          promise,
+          new Promise<T>((_, reject) => {
+            timeoutId = setTimeout(
+              () => reject(new Error("AUTH_TIMEOUT")),
+              timeoutMs
+            );
+          }),
+        ]);
+      } finally {
+        if (timeoutId) clearTimeout(timeoutId);
+      }
+    };
 
     async function init() {
       try {
-        const { data, error } = await supabase.auth.getSession();
-
-        if (error) {
-          console.warn("Sessão inválida, limpando:", error.message);
-          await clearStaleSession();
-          return;
-        }
+        const result = await runWithTimeout(
+          supabase.auth.getSession(),
+          10000
+        );
 
         if (!mounted) return;
 
-        setSession(data.session);
-        setUser(data.session?.user ?? null);
+        if (result.error) {
+          console.warn("Sessão inválida:", result.error.message);
 
-        if (data.session?.user) {
-          await fetchProfile(data.session.user.id);
+          clearLocalAuthStorage();
+
+          try {
+            await supabase.auth.signOut({ scope: "local" });
+          } catch {
+            // O storage já foi limpo manualmente.
+          }
+
+          resetAuthState();
+          initialized = true;
+          return;
+        }
+
+        const currentSession = result.data.session;
+
+        // "Lembrar de mim" controla se uma sessão persistida deve ser
+        // reutilizada depois que o navegador for fechado.
+        const rememberMe = localStorage.getItem("tamoaqui-remember-me") !== "false";
+
+        if (currentSession && !rememberMe) {
+          try {
+            await supabase.auth.signOut({ scope: "local" });
+          } catch {
+            // O estado local abaixo já garante que o usuário fique deslogado.
+          }
+
+          clearLocalAuthStorage();
+          resetAuthState();
+          initialized = true;
+          return;
+        }
+
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+
+        if (currentSession?.user) {
+          try {
+            await runWithTimeout(
+              fetchProfile(currentSession.user.id),
+              10000
+            );
+          } catch (err) {
+            console.warn("Não foi possível carregar o profile:", err);
+
+            // Se o profile não puder ser carregado, não deixamos a aplicação
+            // presa no loading.
+            setProfile(null);
+          }
         } else {
           setProfile(null);
         }
+
+        initialized = true;
       } catch (err) {
-        console.error("Falha ao inicializar sessão:", err);
-        await clearStaleSession();
+        console.warn("Falha ao recuperar sessão:", err);
+
+        // Timeout ou refresh token quebrado:
+        // limpa o cache e começa como usuário deslogado.
+        clearLocalAuthStorage();
+
+        try {
+          await supabase.auth.signOut({ scope: "local" });
+        } catch {
+          // Ignorado de propósito.
+        }
+
+        resetAuthState();
+        initialized = true;
       } finally {
-        if (mounted) setLoading(false);
+        finishLoading();
       }
     }
 
     init();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
-      if (!mounted) return;
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      async (event, newSession) => {
+        if (!mounted) return;
 
-      if (event === "TOKEN_REFRESHED" && !newSession) {
-        await clearStaleSession();
-        if (mounted) setLoading(false);
-        return;
+        // Durante a inicialização, getSession() é a fonte principal.
+        // Evitamos concorrência entre getSession e o listener.
+        if (!initialized && event === "INITIAL_SESSION") {
+          return;
+        }
+
+        if (event === "SIGNED_OUT" || !newSession) {
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+
+        setSession(newSession);
+        setUser(newSession.user);
+
+        try {
+          await runWithTimeout(
+            fetchProfile(newSession.user.id),
+            10000
+          );
+        } catch (err) {
+          console.warn("Erro ao atualizar profile após evento Auth:", err);
+          setProfile(null);
+        }
+
+        setLoading(false);
       }
-
-      setSession(newSession);
-      setUser(newSession?.user ?? null);
-
-      if (newSession?.user) {
-        await fetchProfile(newSession.user.id);
-      } else {
-        setProfile(null);
-      }
-
-      if (mounted) setLoading(false);
-    });
+    );
 
     return () => {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [fetchProfile, clearStaleSession]);
+  }, [fetchProfile]);
 
   const signUp: AuthContextType["signUp"] = async ({
     email,
@@ -172,32 +301,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null, needsConfirmation: stillNeedsConfirmation };
   };
 
-  const signIn: AuthContextType["signIn"] = async (email, password) => {
+  const signIn: AuthContextType["signIn"] = async (email, password, rememberMe = true) => {
+    localStorage.setItem("tamoaqui-remember-me", String(rememberMe));
+
     const { error } = await supabase.auth.signInWithPassword({ email, password });
+
     if (error) return { error: error.message };
     return { error: null };
   };
 
   // Logout explícito: encerra a sessão no servidor e também remove a sessão local.
   const signOut: AuthContextType["signOut"] = async () => {
-    try {
-      const { error } = await supabase.auth.signOut({ scope: "global" });
+    // Primeiro limpamos a UI para o usuário sair imediatamente.
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+    setNeedsConfirmation(false);
 
-      if (error) {
-        console.error("Erro ao sair da conta:", error.message);
-      }
+    try {
+      await Promise.race([
+        supabase.auth.signOut({ scope: "global" }),
+        new Promise((resolve) => setTimeout(resolve, 5000)),
+      ]);
+    } catch (err) {
+      console.warn("Erro ao sair da conta:", err);
     } finally {
-      // Mesmo que o servidor retorne erro, não deixamos a UI continuar autenticada.
       try {
         await supabase.auth.signOut({ scope: "local" });
       } catch {
-        // Ignora: o estado abaixo garante a saída visual.
+        // Ignorado: fazemos a limpeza local abaixo.
       }
 
-      setSession(null);
-      setUser(null);
-      setProfile(null);
-      setNeedsConfirmation(false);
+      try {
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith("sb-") && key.includes("-auth-token")) {
+            localStorage.removeItem(key);
+          }
+        }
+      } catch {
+        // Ignorado.
+      }
     }
   };
 
