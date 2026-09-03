@@ -39,7 +39,7 @@ export interface UIPost {
 }
 
 const DEFAULT_AVATAR =
-  "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=64&h=64&fit=crop&auto=format";
+  "data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 160 160%22%3E%3Crect width=%22160%22 height=%22160%22 rx=%2280%22 fill=%22%23d1d5db%22/%3E%3Ccircle cx=%2280%22 cy=%2258%22 r=%2229%22 fill=%22%236b7280%22/%3E%3Cpath d=%22M28 137c6-29 25-45 52-45s46 16 52 45%22 fill=%22%236b7280%22/%3E%3C/svg%3E";
 
 function timeAgo(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
