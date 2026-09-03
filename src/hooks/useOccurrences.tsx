@@ -34,6 +34,8 @@ export interface UIPost {
   liked: boolean;
   saved: boolean;
   district: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 const DEFAULT_AVATAR =
@@ -106,6 +108,8 @@ export function usePosts(currentUserId: string | null) {
       liked: likedSet.has(r.id),
       saved: savedSet.has(r.id),
       district: r.district ?? "",
+      latitude: r.latitude ?? null,
+      longitude: r.longitude ?? null,
     }));
 
     setPosts(mapped);
@@ -177,9 +181,13 @@ interface CreatePostParams {
   location: string;
   problemType: ProblemId;
   district: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
-export async function createPost({ userId, file, caption, location, problemType, district }: CreatePostParams) {
+export async function createPost({
+  userId, file, caption, location, problemType, district, latitude, longitude,
+}: CreatePostParams) {
   const ext = file.name.split(".").pop() || "jpg";
   const path = `${userId}/${Date.now()}.${ext}`;
 
@@ -200,6 +208,8 @@ export async function createPost({ userId, file, caption, location, problemType,
       location,
       problem_type: problemType,
       district,
+      latitude: latitude ?? null,
+      longitude: longitude ?? null,
     })
     .select()
     .single();
@@ -208,9 +218,9 @@ export async function createPost({ userId, file, caption, location, problemType,
   return data;
 }
 
-// ─── Prefeitura: atualizar status de uma ocorrência ─────────────────────────
+// ─── Atualizar status de uma ocorrência (usado pelo dashboard da Prefeitura) ─
 
-const STATUS_LABELS: Record<PostStatus, string> = {
+const STATUS_LABEL: Record<PostStatus, string> = {
   aberto: "Aberto",
   em_analise: "Em Análise",
   resolvido: "Resolvido",
@@ -220,38 +230,48 @@ export async function updatePostStatus(
   postId: string,
   status: PostStatus,
   obs: string,
-  prefeituraUserId: string,
-  ownerUserId: string
+  changedByUserId: string,
+  postOwnerUserId: string
 ) {
-  const { error } = await supabase.from("posts").update({ status }).eq("id", postId);
-  if (error) throw error;
+  const { error: updateError } = await supabase
+    .from("posts")
+    .update({ status })
+    .eq("id", postId);
+  if (updateError) throw updateError;
 
-  if (obs) {
-    await supabase.from("comments").insert({
-      post_id: postId,
-      user_id: prefeituraUserId,
-      text: `[Prefeitura] Status atualizado para "${STATUS_LABELS[status]}". ${obs}`,
-    });
-  }
-
-  // Notifica o dono do post
-  await supabase.from("notifications").insert({
-    user_id: ownerUserId,
-    type: "status",
-    message: `atualizou o status da sua ocorrência para ${STATUS_LABELS[status]}.`,
+  // Registra a observação do funcionário no histórico do status, se a tabela existir.
+  // Se você ainda não tiver essa tabela, pode remover este bloco sem problemas.
+  const { error: historyError } = await supabase.from("status_history").insert({
     post_id: postId,
+    status,
+    obs,
+    changed_by: changedByUserId,
   });
+  if (historyError) console.error("status_history:", historyError);
+
+  // Notifica o dono da ocorrência (não notifica se o próprio autor mudou o status)
+  if (postOwnerUserId && postOwnerUserId !== changedByUserId) {
+    const message = `Sua ocorrência foi atualizada para "${STATUS_LABEL[status]}"${obs ? `: ${obs}` : ""}`;
+    const { error: notifError } = await supabase.from("notifications").insert({
+      user_id: postOwnerUserId,
+      type: "status",
+      message,
+      post_id: postId,
+      read: false,
+    });
+    if (notifError) console.error("notifications:", notifError);
+  }
 }
 
 // ─── Notificações ────────────────────────────────────────────────────────────
 
 export interface UINotification {
   id: string;
-  type: "like" | "comment" | "status";
+  type: string; // "like" | "comment" | "status" | ...
   message: string;
   time: string;
   read: boolean;
-  postImage: string | null;
+  postImage?: string | null;
 }
 
 export async function fetchNotifications(userId: string): Promise<UINotification[]> {
@@ -259,9 +279,13 @@ export async function fetchNotifications(userId: string): Promise<UINotification
     .from("notifications")
     .select("id, type, message, read, created_at, posts:post_id ( image_url )")
     .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(50);
 
-  if (error || !data) return [];
+  if (error || !data) {
+    console.error(error);
+    return [];
+  }
 
   return data.map((n: any) => ({
     id: n.id,
@@ -274,6 +298,10 @@ export async function fetchNotifications(userId: string): Promise<UINotification
 }
 
 export async function markAllNotificationsRead(userId: string) {
-  const { error } = await supabase.from("notifications").update({ read: true }).eq("user_id", userId).eq("read", false);
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("user_id", userId)
+    .eq("read", false);
   if (error) throw error;
 }

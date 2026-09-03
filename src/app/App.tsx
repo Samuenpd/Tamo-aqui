@@ -18,6 +18,8 @@ import {
   type UIPost, type UIComment, type UINotification, type ProblemId, type PostStatus,
 } from "../hooks/useOccurrences";
 
+import { LocationPicker, type LocationValue } from "./components/LocationPicker";
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PROBLEM_TYPES = [
@@ -601,12 +603,11 @@ function PostCard({ post, onToggleLike, onToggleSave, onOpenComments, onOpenProf
 
 // ─── Create Post Modal ────────────────────────────────────────────────────────
 
-function CreatePostModal({ onClose, onCreate }: { onClose: () => void; onCreate: (file: File, caption: string, location: string, problemType: ProblemId) => Promise<void> }) {
-  const [step, setStep]       = useState<"upload" | "details">("upload");
+function CreatePostModal({ onClose, onCreate }: { onClose: () => void; onCreate: (file: File, caption: string, location: string, problemType: ProblemId, lat?: number, lng?: number) => Promise<void> }) {  const [step, setStep]       = useState<"upload" | "details">("upload");
   const [file, setFile]       = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [caption, setCaption] = useState("");
-  const [location, setLocation] = useState("");
+  const [loc, setLoc] = useState<LocationValue | null>(null);
   const [problemType, setProblemType] = useState<ProblemId | null>(null);
   const [dropOpen, setDropOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -625,7 +626,7 @@ function CreatePostModal({ onClose, onCreate }: { onClose: () => void; onCreate:
     setSubmitting(true);
     setSubmitError("");
     try {
-      await onCreate(file, caption, location, problemType);
+      await onCreate(file, caption, loc?.address ?? "", problemType, loc?.lat, loc?.lng);
       onClose();
     } catch (err) {
       console.error(err);
@@ -666,7 +667,7 @@ function CreatePostModal({ onClose, onCreate }: { onClose: () => void; onCreate:
             </div>
             <div>
               <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Localização</label>
-              <div className="flex items-center gap-2 px-4 py-3 rounded-xl border border-border bg-input-background"><MapPin size={15} className="text-primary shrink-0" /><input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Ex: Rua Barão de Itapetininga, 45" className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none" /></div>
+              <LocationPicker value={loc} onChange={setLoc} />
             </div>
             <div>
               <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Descrição *</label>
@@ -1592,10 +1593,15 @@ function CidadaoApp({ posts, setPosts, profile, notifs, onMarkAllRead, dark, onT
     setPosts((p) => p.map((x) => x.id === commentPost.id ? { ...x, commentsCount: x.commentsCount + 1 } : x));
   };
 
-  const createOccurrence = async (file: File, caption: string, location: string, problemType: ProblemId) => {
-    await createPostDb({ userId: profile.id, file, caption, location, problemType, district: profile.district ?? "" });
-    await refetchPosts();
-  };
+  const createOccurrence = async (
+  file: File, caption: string, location: string, problemType: ProblemId, lat?: number, lng?: number
+) => {
+  await createPostDb({
+    userId: profile.id, file, caption, location, problemType,
+    district: profile.district ?? "", latitude: lat, longitude: lng,
+  });
+  await refetchPosts();
+};
 
   const filtered = filterType === "todos" ? posts : posts.filter((p) => p.problemType === filterType);
   const unread   = notifs.filter((n) => !n.read).length;
