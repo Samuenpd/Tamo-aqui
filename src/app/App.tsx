@@ -6,6 +6,7 @@ import {
   Clock, TrendingUp, Send, Grid, List, Settings, LogOut, Sun, Moon,
   Award, Building2, Users, ArrowRight, BarChart3, ClipboardList, ChevronUp,
   Eye, EyeOff, Edit3, RefreshCw, Lock, AtSign, Filter, ChevronRight, MailCheck,
+  Calendar,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -20,6 +21,10 @@ import {
 
 import { LocationPicker, type LocationValue } from "./components/LocationPicker";
 
+import { Ticket, Trophy, GraduationCap, HeartHandshake, School, Landmark } from "lucide-react";
+import { useEvents, createEvent, type UIEvent, type EventCategory } from "../hooks/useEvents";
+
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PROBLEM_TYPES = [
@@ -32,7 +37,16 @@ const PROBLEM_TYPES = [
   { id: "sinalizacao",label: "Sinalização",           icon: Navigation,   color: "#a78bfa", bg: "bg-violet-950/60" },
 ] as const;
 
-type TabId = "feed" | "buscar" | "notif" | "perfil";
+const EVENT_CATEGORIES = [
+  { id: "cultural",     label: "Cultural",              icon: Ticket,         color: "#a78bfa" },
+  { id: "esportivo",    label: "Esportivo",              icon: Trophy,         color: "#22c55e" },
+  { id: "educacional",  label: "Educacional",            icon: GraduationCap,  color: "#3b82f6" },
+  { id: "comunitario",  label: "Ação da Comunidade",     icon: HeartHandshake, color: "#f97316" },
+  { id: "escolar",      label: "Evento Escolar",         icon: School,         color: "#facc15" },
+  { id: "associacao",   label: "Associação de Bairro",   icon: Landmark,       color: "#ef4444" },
+] as const;
+
+type TabId = "feed" | "buscar" | "notif" | "eventos" | "perfil";
 
 const STATUS_META: Record<PostStatus, { label: string; color: string; bg: string; dot: string; next: PostStatus | null; nextLabel: string }> = {
   aberto:     { label: "Aberto",      color: "text-red-400",    bg: "bg-red-950/60",    dot: "bg-red-400",    next: "em_analise", nextLabel: "Iniciar Análise"   },
@@ -601,6 +615,7 @@ function PostCard({ post, onToggleLike, onToggleSave, onOpenComments, onOpenProf
   );
 }
 
+
 // ─── Create Post Modal ────────────────────────────────────────────────────────
 
 function CreatePostModal({ onClose, onCreate }: { onClose: () => void; onCreate: (file: File, caption: string, location: string, problemType: ProblemId, lat?: number, lng?: number) => Promise<void> }) {  const [step, setStep]       = useState<"upload" | "details">("upload");
@@ -681,6 +696,171 @@ function CreatePostModal({ onClose, onCreate }: { onClose: () => void; onCreate:
         )}
       </motion.div>
     </motion.div>
+  );
+}
+
+// ─── Event Card ────────────────────────────────────────────────────────
+
+function EventCard({ event }: { event: UIEvent }) {
+  const cat = EVENT_CATEGORIES.find((c) => c.id === event.category)!;
+  const dateLabel = new Date(event.eventDate + "T00:00:00").toLocaleDateString("pt-BR", {
+    day: "2-digit", month: "short",
+  });
+
+  return (
+    <motion.article initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-card border border-border rounded-2xl overflow-hidden">
+      {event.image && (
+        <div className="relative w-full h-40 bg-muted">
+          <img src={event.image} alt={event.title} className="w-full h-full object-cover" />
+        </div>
+      )}
+      <div className="p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold" style={{ backgroundColor: `${cat.color}20`, color: cat.color }}>
+            <cat.icon size={11} />{cat.label}
+          </span>
+          <span className="text-xs font-bold text-muted-foreground ml-auto">{dateLabel}{event.eventTime ? ` · ${event.eventTime}` : ""}</span>
+        </div>
+        <h3 className="text-sm font-bold text-foreground">{event.title}</h3>
+        <p className="text-xs text-muted-foreground line-clamp-2">{event.description}</p>
+        <div className="flex items-center gap-1 text-muted-foreground"><MapPin size={11} /><span className="text-xs">{event.location}</span></div>
+        <p className="text-xs text-muted-foreground">por @{event.user}</p>
+      </div>
+    </motion.article>
+  );
+}
+
+// ─── create event modal ────────────────────────────────────────────────────────
+
+function CreateEventModal({ onClose, onCreate }: {
+  onClose: () => void;
+  onCreate: (params: { title: string; description: string; eventDate: string; eventTime: string; location: string; category: EventCategory; file: File | null }) => Promise<void>;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [eventTime, setEventTime] = useState("");
+  const [location, setLocation] = useState("");
+  const [category, setCategory] = useState<EventCategory | null>(null);
+  const [dropOpen, setDropOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const sel = EVENT_CATEGORIES.find((c) => c.id === category);
+
+  const submit = async () => {
+    if (!title || !description || !eventDate || !category) return;
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      await onCreate({ title, description, eventDate, eventTime, location, category, file });
+      onClose();
+    } catch (err) {
+      console.error(err);
+      setSubmitError("Não foi possível publicar o evento. Tente novamente.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.85)" }} onClick={onClose}>
+      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="bg-card border border-border rounded-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <h2 className="text-base font-bold text-foreground">Novo Evento</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X size={20} /></button>
+        </div>
+        <div className="p-5 flex flex-col gap-4 max-h-[80vh] overflow-y-auto">
+          <div onClick={() => fileRef.current?.click()} className="w-full h-32 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-primary bg-muted/40 overflow-hidden">
+            {preview ? <img src={preview} alt="" className="w-full h-full object-cover" /> : <><Camera size={20} className="text-primary" /><p className="text-xs text-muted-foreground">Foto do evento (opcional)</p></>}
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); setPreview(URL.createObjectURL(f)); } }} />
+
+          <div>
+            <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Categoria *</label>
+            <div className="relative">
+              <button onClick={() => setDropOpen((v) => !v)} className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-border bg-input-background text-sm font-semibold text-foreground">
+                {sel ? <span className="flex items-center gap-2"><sel.icon size={16} style={{ color: sel.color }} />{sel.label}</span> : <span className="text-muted-foreground">Selecione a categoria...</span>}
+                <ChevronDown size={16} className={dropOpen ? "rotate-180" : ""} />
+              </button>
+              {dropOpen && <div className="absolute z-10 w-full mt-1 bg-popover border border-border rounded-xl overflow-hidden shadow-xl">{EVENT_CATEGORIES.map((c) => <button key={c.id} onClick={() => { setCategory(c.id as EventCategory); setDropOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted text-sm font-semibold text-foreground text-left"><c.icon size={16} style={{ color: c.color }} />{c.label}</button>)}</div>}
+            </div>
+          </div>
+
+          <div><label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Título *</label>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: Feira Comunitária" className="w-full px-4 py-3 rounded-xl border border-border bg-input-background text-sm text-foreground outline-none" /></div>
+
+          <div className="flex gap-3">
+            <div className="flex-1"><label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Data *</label>
+              <input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-border bg-input-background text-sm text-foreground outline-none" /></div>
+            <div className="flex-1"><label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Horário</label>
+              <input type="time" value={eventTime} onChange={(e) => setEventTime(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-border bg-input-background text-sm text-foreground outline-none" /></div>
+          </div>
+
+          <div><label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Localização</label>
+            <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Ex: Praça Central" className="w-full px-4 py-3 rounded-xl border border-border bg-input-background text-sm text-foreground outline-none" /></div>
+
+          <div><label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Descrição *</label>
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full px-4 py-3 rounded-xl border border-border bg-input-background text-sm text-foreground outline-none resize-none" /></div>
+
+          {submitError && <p className="text-xs font-semibold text-destructive">{submitError}</p>}
+          <button onClick={submit} disabled={!title || !description || !eventDate || !category || submitting} className="w-full py-3.5 rounded-xl text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2" style={{ backgroundColor: "#f97316", color: "#0f0f0f" }}>
+            {submitting ? <><RefreshCw size={16} className="animate-spin" />Publicando…</> : "Publicar Evento"}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ─── Events Tab ───────────────────────────────────────────────────────────────
+
+function EventsTab({ events, onOpenModal }: { events: UIEvent[]; onOpenModal: () => void }) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const sorted = [...events].sort((a, b) => a.eventDate.localeCompare(b.eventDate));
+  const upcoming = sorted.filter((e) => e.eventDate >= todayStr);
+  const past = sorted.filter((e) => e.eventDate < todayStr).reverse();
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-black text-foreground">Eventos</h2>
+        <button
+          onClick={onOpenModal}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold"
+          style={{ backgroundColor: "#f97316", color: "#0f0f0f" }}
+        >
+          <Ticket size={14} />Criar Evento
+        </button>
+      </div>
+
+      {events.length === 0 && (
+        <div className="text-center py-16 text-muted-foreground">
+          <Ticket size={32} className="mx-auto mb-2 opacity-30" />
+          <p className="text-sm font-semibold">Nenhum evento por aqui ainda</p>
+        </div>
+      )}
+
+      {upcoming.length > 0 && (
+        <div>
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Próximos</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {upcoming.map((e) => <EventCard key={e.id} event={e} />)}
+          </div>
+        </div>
+      )}
+
+      {past.length > 0 && (
+        <div>
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Passados</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 opacity-70">
+            {past.map((e) => <EventCard key={e.id} event={e} />)}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1533,6 +1713,7 @@ function CidadaoApp({ posts, setPosts, profile, notifs, onMarkAllRead, dark, onT
 }) {
   const [activeTab,   setActiveTab]   = useState<TabId>("feed");
   const [showModal,   setShowModal]   = useState(false);
+  const [showEventModal, setShowEventModal] = useState(false);
   const [filterType,  setFilterType]  = useState<ProblemId | "todos">("todos");
   const [commentPost, setCommentPost] = useState<UIPost | null>(null);
   const [commentsLoading, setCommentsLoading] = useState(false);
@@ -1540,6 +1721,9 @@ function CidadaoApp({ posts, setPosts, profile, notifs, onMarkAllRead, dark, onT
   const { updateBanner } = useAuth();
   const [bannerError, setBannerError] = useState("");
   const [uploadingBanner, setUploadingBanner] = useState(false);
+
+  // Integração do hook de Eventos
+  const { events, refetch: refetchEvents } = useEvents();
 
   const handleBannerChange = async (file: File) => {
     setBannerError("");
@@ -1594,14 +1778,25 @@ function CidadaoApp({ posts, setPosts, profile, notifs, onMarkAllRead, dark, onT
   };
 
   const createOccurrence = async (
-  file: File, caption: string, location: string, problemType: ProblemId, lat?: number, lng?: number
-) => {
-  await createPostDb({
-    userId: profile.id, file, caption, location, problemType,
-    district: profile.district ?? "", latitude: lat, longitude: lng,
-  });
-  await refetchPosts();
-};
+    file: File, caption: string, location: string, problemType: ProblemId, lat?: number, lng?: number
+  ) => {
+    await createPostDb({
+      userId: profile.id, file, caption, location, problemType,
+      district: profile.district ?? "", latitude: lat, longitude: lng,
+    });
+    await refetchPosts();
+  };
+
+  // Handler de criação de eventos
+  const createEventHandler = async (params: any) => {
+    await createEvent({
+      userId: profile.id,
+      district: profile.district ?? "",
+      ...params,
+    });
+    await refetchEvents();
+    setShowEventModal(false);
+  };
 
   const filtered = filterType === "todos" ? posts : posts.filter((p) => p.problemType === filterType);
   const unread   = notifs.filter((n) => !n.read).length;
@@ -1613,10 +1808,11 @@ function CidadaoApp({ posts, setPosts, profile, notifs, onMarkAllRead, dark, onT
     .slice(0, 5);
 
   const NAV = [
-    { id: "feed"   as TabId, label: "Início",         icon: Home },
-    { id: "buscar" as TabId, label: "Explorar",        icon: Search },
-    { id: "notif"  as TabId, label: "Notificações",    icon: Bell,  badge: unread },
-    { id: "perfil" as TabId, label: "Perfil",          icon: User },
+    { id: "feed"    as TabId, label: "Início",        icon: Home },
+    { id: "buscar"  as TabId, label: "Explorar",      icon: Search },
+    { id: "eventos" as TabId, label: "Eventos",       icon: Calendar },
+    { id: "notif"   as TabId, label: "Notificações",  icon: Bell,    badge: unread },
+    { id: "perfil"  as TabId, label: "Perfil",        icon: User },
   ];
 
   return (
@@ -1636,6 +1832,7 @@ function CidadaoApp({ posts, setPosts, profile, notifs, onMarkAllRead, dark, onT
             </button>
           ))}
           <button onClick={() => setShowModal(true)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold mt-2" style={{ backgroundColor: "#f97316", color: "#0f0f0f" }}><PlusSquare size={18} />Nova Ocorrência</button>
+          <button onClick={() => setShowEventModal(true)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold mt-1 bg-muted hover:bg-muted/80 text-foreground transition-colors"><Calendar size={18} />Criar Evento</button>
           <button onClick={onToggleDark} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold text-muted-foreground hover:text-foreground hover:bg-muted transition-all">{dark ? <Sun size={18} /> : <Moon size={18} />}{dark ? "Modo Claro" : "Modo Escuro"}</button>
           <div className="mt-auto border-t border-border pt-4 mx-1">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 px-2">Resumo Geral</p>
@@ -1649,7 +1846,7 @@ function CidadaoApp({ posts, setPosts, profile, notifs, onMarkAllRead, dark, onT
         </aside>
 
         <main className="flex-1 overflow-y-auto scrollbar-hide">
-          <div className="max-w-lg mx-auto py-6 px-4">
+          <div className="max-w-4xl mx-auto py-6 px-4">
             {activeTab === "feed" && <>
               <div className="flex gap-2 mb-5 overflow-x-auto scrollbar-hide pb-1">
                 <button onClick={() => setFilterType("todos")} className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 ${filterType === "todos" ? "" : "bg-muted text-muted-foreground"}`} style={filterType === "todos" ? { backgroundColor: "#f97316", color: "#0f0f0f" } : {}}>Todos</button>
@@ -1659,6 +1856,7 @@ function CidadaoApp({ posts, setPosts, profile, notifs, onMarkAllRead, dark, onT
               <div className="space-y-5">{filtered.map((p) => <PostCard key={p.id} post={p} onToggleLike={toggleLike} onToggleSave={toggleSave} onOpenComments={openComments} onOpenProfile={openProfile} />)}</div>
             </>}
             {activeTab === "buscar" && <ExploreTab posts={posts} onOpenComments={openComments} onOpenProfile={openProfile} />}
+            {activeTab === "eventos" && <EventsTab events={events} onOpenModal={() => setShowEventModal(true)} />}
             {activeTab === "notif"  && <NotifTab notifs={notifs} onMarkAll={onMarkAllRead} />}
             {activeTab === "perfil" && (
               <>
@@ -1707,7 +1905,7 @@ function CidadaoApp({ posts, setPosts, profile, notifs, onMarkAllRead, dark, onT
       <div className="md:hidden flex flex-col h-screen">
         <header className="border-b border-border px-4 py-3 flex items-center justify-between shrink-0" style={{ backgroundColor: "var(--card)" }}>
           <div className="flex items-center gap-2"><div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: "#f97316" }}><span className="text-xs font-black" style={{ color: "#0f0f0f" }}>P</span></div><span className="text-sm font-black text-foreground">TamoAqui</span></div>
-          <div className="flex items-center gap-2"><button onClick={onToggleDark} className="text-muted-foreground p-1">{dark ? <Sun size={20} /> : <Moon size={20} />}</button><button onClick={() => setShowModal(true)} className="text-primary"><PlusSquare size={24} /></button></div>
+          <div className="flex items-center gap-2"><button onClick={onToggleDark} className="text-muted-foreground p-1">{dark ? <Sun size={20} /> : <Moon size={20} />}</button><button onClick={() => setShowEventModal(true)} className="text-muted-foreground p-1"><Ticket size={22} /></button><button onClick={() => setShowModal(true)} className="text-primary"><PlusSquare size={24} /></button></div>
         </header>
         <main className="flex-1 overflow-y-auto scrollbar-hide">
           <div className="px-3 py-4">
@@ -1720,6 +1918,7 @@ function CidadaoApp({ posts, setPosts, profile, notifs, onMarkAllRead, dark, onT
               <div className="space-y-4">{filtered.map((p) => <PostCard key={p.id} post={p} onToggleLike={toggleLike} onToggleSave={toggleSave} onOpenComments={openComments} onOpenProfile={openProfile} />)}</div>
             </>}
             {activeTab === "buscar" && <ExploreTab posts={posts} onOpenComments={openComments} onOpenProfile={openProfile} />}
+            {activeTab === "eventos" && <EventsTab events={events} onOpenModal={() => setShowEventModal(true)} />}
             {activeTab === "notif"  && <NotifTab notifs={notifs} onMarkAll={onMarkAllRead} />}
             {activeTab === "perfil" && (
               <>
@@ -1760,14 +1959,14 @@ function CidadaoApp({ posts, setPosts, profile, notifs, onMarkAllRead, dark, onT
       </div>
 
       <AnimatePresence>
-        {showModal   && <CreatePostModal onClose={() => setShowModal(false)} onCreate={createOccurrence} />}
-        {commentPost && <CommentSheet post={commentPost} loading={commentsLoading} onClose={() => setCommentPost(null)} onSubmitComment={submitComment} />}
+        {showModal      && <CreatePostModal onClose={() => setShowModal(false)} onCreate={createOccurrence} />}
+        {showEventModal && <CreateEventModal onClose={() => setShowEventModal(false)} onCreate={createEventHandler} />}
+        {commentPost    && <CommentSheet post={commentPost} loading={commentsLoading} onClose={() => setCommentPost(null)} onSubmitComment={submitComment} />}
       </AnimatePresence>
       <style>{`.scrollbar-hide::-webkit-scrollbar{display:none}.scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}`}</style>
     </div>
   );
 }
-
 // ─── Authenticated shell (busca posts + notificações reais) ──────────────────
 
 function AuthenticatedApp({ profile }: { profile: Profile }) {
