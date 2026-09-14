@@ -1846,7 +1846,7 @@ function CidadaoApp({ posts, setPosts, profile, notifs, onMarkAllRead, dark, onT
         </aside>
 
         <main className="flex-1 overflow-y-auto scrollbar-hide">
-          <div className="max-w-4xl mx-auto py-6 px-4">
+          <div className="max-w-lg mx-auto py-6 px-4">
             {activeTab === "feed" && <>
               <div className="flex gap-2 mb-5 overflow-x-auto scrollbar-hide pb-1">
                 <button onClick={() => setFilterType("todos")} className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 ${filterType === "todos" ? "" : "bg-muted text-muted-foreground"}`} style={filterType === "todos" ? { backgroundColor: "#f97316", color: "#0f0f0f" } : {}}>Todos</button>
