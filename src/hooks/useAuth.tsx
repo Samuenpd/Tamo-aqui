@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  ReactNode,
+} from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 
@@ -38,10 +45,18 @@ interface AuthContextType {
   profile: Profile | null;
   loading: boolean;
   needsConfirmation: boolean;
-  signUp: (params: SignUpParams) => Promise<{ error: string | null; needsConfirmation?: boolean }>;
-  signIn: (email: string, password: string, rememberMe?: boolean) => Promise<{ error: string | null }>;
+  signUp: (
+    params: SignUpParams,
+  ) => Promise<{ error: string | null; needsConfirmation?: boolean }>;
+  signIn: (
+    email: string,
+    password: string,
+    rememberMe?: boolean,
+  ) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
-  updateProfile: (params: UpdateProfileParams) => Promise<{ error: string | null }>;
+  updateProfile: (
+    params: UpdateProfileParams,
+  ) => Promise<{ error: string | null }>;
   updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
   updateAvatar: (file: File) => Promise<{ error: string | null }>;
   updateBanner: (file: File) => Promise<{ error: string | null }>;
@@ -102,10 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
-          if (
-            key &&
-            (key.startsWith("sb-") && key.includes("-auth-token"))
-          ) {
+          if (key && key.startsWith("sb-") && key.includes("-auth-token")) {
             keysToRemove.push(key);
           }
         }
@@ -126,7 +138,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     };
 
-    const runWithTimeout = async <T,>(promise: Promise<T>, timeoutMs = 10000): Promise<T> => {
+    const runWithTimeout = async <T,>(
+      promise: Promise<T>,
+      timeoutMs = 10000,
+    ): Promise<T> => {
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
       try {
@@ -135,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           new Promise<T>((_, reject) => {
             timeoutId = setTimeout(
               () => reject(new Error("AUTH_TIMEOUT")),
-              timeoutMs
+              timeoutMs,
             );
           }),
         ]);
@@ -146,10 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function init() {
       try {
-        const result = await runWithTimeout(
-          supabase.auth.getSession(),
-          10000
-        );
+        const result = await runWithTimeout(supabase.auth.getSession(), 10000);
 
         if (!mounted) return;
 
@@ -173,7 +185,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // "Lembrar de mim" controla se uma sessão persistida deve ser
         // reutilizada depois que o navegador for fechado.
-        const rememberMe = localStorage.getItem("tamoaqui-remember-me") !== "false";
+        const rememberMe =
+          localStorage.getItem("tamoaqui-remember-me") !== "false";
 
         if (currentSession && !rememberMe) {
           try {
@@ -193,10 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (currentSession?.user) {
           try {
-            await runWithTimeout(
-              fetchProfile(currentSession.user.id),
-              10000
-            );
+            await runWithTimeout(fetchProfile(currentSession.user.id), 10000);
           } catch (err) {
             console.warn("Não foi possível carregar o profile:", err);
 
@@ -253,17 +263,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(newSession.user);
 
         try {
-          await runWithTimeout(
-            fetchProfile(newSession.user.id),
-            10000
-          );
+          await runWithTimeout(fetchProfile(newSession.user.id), 10000);
         } catch (err) {
           console.warn("Erro ao atualizar profile após evento Auth:", err);
           setProfile(null);
         }
 
         setLoading(false);
-      }
+      },
     );
 
     return () => {
@@ -301,10 +308,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null, needsConfirmation: stillNeedsConfirmation };
   };
 
-  const signIn: AuthContextType["signIn"] = async (email, password, rememberMe = true) => {
+  const signIn: AuthContextType["signIn"] = async (
+    email,
+    password,
+    rememberMe = true,
+  ) => {
     localStorage.setItem("tamoaqui-remember-me", String(rememberMe));
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
     if (error) return { error: error.message };
     return { error: null };
@@ -373,7 +387,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
-  const updatePassword: AuthContextType["updatePassword"] = async (newPassword) => {
+  const updatePassword: AuthContextType["updatePassword"] = async (
+    newPassword,
+  ) => {
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) return { error: error.message };
     return { error: null };
@@ -381,7 +397,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const uploadProfileImage = async (
     file: File,
-    kind: "avatar" | "banner"
+    kind: "avatar" | "banner",
   ): Promise<{ error: string | null }> => {
     if (!user) return { error: "Usuário não autenticado." };
 

@@ -44,29 +44,58 @@ interface NominatimResult {
 }
 
 const BRAZIL_REGIONS: Record<string, string> = {
-  "Acre": "Norte", "Amapá": "Norte", "Amazonas": "Norte", "Pará": "Norte",
-  "Rondônia": "Norte", "Roraima": "Norte", "Tocantins": "Norte",
-  "Alagoas": "Nordeste", "Bahia": "Nordeste", "Ceará": "Nordeste", "Maranhão": "Nordeste",
-  "Paraíba": "Nordeste", "Pernambuco": "Nordeste", "Piauí": "Nordeste",
-  "Rio Grande do Norte": "Nordeste", "Sergipe": "Nordeste",
-  "Distrito Federal": "Centro-Oeste", "Goiás": "Centro-Oeste",
-  "Mato Grosso": "Centro-Oeste", "Mato Grosso do Sul": "Centro-Oeste",
-  "Espírito Santo": "Sudeste", "Minas Gerais": "Sudeste",
-  "Rio de Janeiro": "Sudeste", "São Paulo": "Sudeste",
-  "Paraná": "Sul", "Rio Grande do Sul": "Sul", "Santa Catarina": "Sul",
+  Acre: "Norte",
+  Amapá: "Norte",
+  Amazonas: "Norte",
+  Pará: "Norte",
+  Rondônia: "Norte",
+  Roraima: "Norte",
+  Tocantins: "Norte",
+  Alagoas: "Nordeste",
+  Bahia: "Nordeste",
+  Ceará: "Nordeste",
+  Maranhão: "Nordeste",
+  Paraíba: "Nordeste",
+  Pernambuco: "Nordeste",
+  Piauí: "Nordeste",
+  "Rio Grande do Norte": "Nordeste",
+  Sergipe: "Nordeste",
+  "Distrito Federal": "Centro-Oeste",
+  Goiás: "Centro-Oeste",
+  "Mato Grosso": "Centro-Oeste",
+  "Mato Grosso do Sul": "Centro-Oeste",
+  "Espírito Santo": "Sudeste",
+  "Minas Gerais": "Sudeste",
+  "Rio de Janeiro": "Sudeste",
+  "São Paulo": "Sudeste",
+  Paraná: "Sul",
+  "Rio Grande do Sul": "Sul",
+  "Santa Catarina": "Sul",
 };
 
-function formatShortAddress(address?: NominatimAddress, fallback?: string): string {
+function formatShortAddress(
+  address?: NominatimAddress,
+  fallback?: string,
+): string {
   if (!address) return fallback ?? "";
 
   const street = address.road || address.pedestrian || "";
   const neighborhood =
-    address.suburb || address.neighbourhood || address.quarter || address.city_district || "";
-  const city = address.city || address.town || address.village || address.municipality || "";
-  const region = address.state ? BRAZIL_REGIONS[address.state] ?? "" : "";
+    address.suburb ||
+    address.neighbourhood ||
+    address.quarter ||
+    address.city_district ||
+    "";
+  const city =
+    address.city ||
+    address.town ||
+    address.village ||
+    address.municipality ||
+    "";
+  const region = address.state ? (BRAZIL_REGIONS[address.state] ?? "") : "";
 
   const parts = [street, neighborhood, city, region].filter(Boolean);
-  return parts.length > 0 ? parts.join(", ") : fallback ?? "";
+  return parts.length > 0 ? parts.join(", ") : (fallback ?? "");
 }
 
 async function searchAddress(query: string): Promise<NominatimResult[]> {
@@ -85,7 +114,10 @@ async function searchAddress(query: string): Promise<NominatimResult[]> {
 }
 
 // Alterado para retornar tanto o endereço formatado quanto o número
-async function reverseGeocode(lat: number, lng: number): Promise<{ addressStr: string; houseNumber: string }> {
+async function reverseGeocode(
+  lat: number,
+  lng: number,
+): Promise<{ addressStr: string; houseNumber: string }> {
   const url = new URL("https://nominatim.openstreetmap.org/reverse");
   url.searchParams.set("lat", String(lat));
   url.searchParams.set("lon", String(lng));
@@ -97,10 +129,10 @@ async function reverseGeocode(lat: number, lng: number): Promise<{ addressStr: s
   });
   if (!res.ok) return { addressStr: "", houseNumber: "" };
   const data = await res.json();
-  
+
   return {
     addressStr: formatShortAddress(data.address, data.display_name),
-    houseNumber: data.address?.house_number || ""
+    houseNumber: data.address?.house_number || "",
   };
 }
 
@@ -135,11 +167,14 @@ export function LocationPicker({
     });
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19,
     }).addTo(mapObj.current);
 
-    markerObj.current = L.marker(center, { draggable: true }).addTo(mapObj.current);
+    markerObj.current = L.marker(center, { draggable: true }).addTo(
+      mapObj.current,
+    );
 
     const applyPosition = async (lat: number, lng: number) => {
       markerObj.current?.setLatLng([lat, lng]);
@@ -189,12 +224,12 @@ export function LocationPicker({
     const lng = parseFloat(r.lon);
     const shortAddress = formatShortAddress(r.address, r.display_name);
     const houseNumber = r.address?.house_number || "";
-    
+
     setQuery(shortAddress);
     setNumber(houseNumber);
     setResults([]);
     setShowResults(false);
-    
+
     markerObj.current?.setLatLng([lat, lng]);
     mapObj.current?.setView([lat, lng], 17);
     onChange({ address: shortAddress, number: houseNumber, lat, lng });
@@ -215,14 +250,22 @@ export function LocationPicker({
         const { latitude, longitude } = pos.coords;
         markerObj.current?.setLatLng([latitude, longitude]);
         mapObj.current?.setView([latitude, longitude], 17);
-        
-        const { addressStr, houseNumber } = await reverseGeocode(latitude, longitude);
+
+        const { addressStr, houseNumber } = await reverseGeocode(
+          latitude,
+          longitude,
+        );
         setQuery(addressStr);
         setNumber(houseNumber);
         setLocating(false);
-        onChange({ address: addressStr, number: houseNumber, lat: latitude, lng: longitude });
+        onChange({
+          address: addressStr,
+          number: houseNumber,
+          lat: latitude,
+          lng: longitude,
+        });
       },
-      () => setLocating(false)
+      () => setLocating(false),
     );
   };
 
@@ -241,7 +284,14 @@ export function LocationPicker({
               className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
             />
             {query && (
-              <button type="button" onClick={() => { setQuery(""); setResults([]); }} className="text-muted-foreground shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setResults([]);
+                }}
+                className="text-muted-foreground shrink-0"
+              >
                 <X size={14} />
               </button>
             )}
@@ -252,7 +302,11 @@ export function LocationPicker({
               className="text-muted-foreground hover:text-primary shrink-0"
               aria-label="Usar minha localização"
             >
-              {locating ? <RefreshCw size={15} className="animate-spin" /> : <Navigation size={15} />}
+              {locating ? (
+                <RefreshCw size={15} className="animate-spin" />
+              ) : (
+                <Navigation size={15} />
+              )}
             </button>
           </div>
 
@@ -260,20 +314,28 @@ export function LocationPicker({
             <div className="absolute z-[1000] w-full mt-1 bg-popover border border-border rounded-xl overflow-hidden shadow-xl max-h-48 overflow-y-auto">
               {searching && (
                 <div className="px-4 py-3 text-xs text-muted-foreground flex items-center gap-2">
-                  <RefreshCw size={12} className="animate-spin" />Buscando...
+                  <RefreshCw size={12} className="animate-spin" />
+                  Buscando...
                 </div>
               )}
-              {!searching && results.map((r, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => pickResult(r)}
-                  className="w-full flex items-start gap-2 px-4 py-2.5 hover:bg-muted text-left text-xs text-foreground"
-                >
-                  <MapPin size={12} className="text-primary shrink-0 mt-0.5" />
-                  <span className="line-clamp-2">{formatShortAddress(r.address, r.display_name)} {r.address?.house_number && `, ${r.address.house_number}`}</span>
-                </button>
-              ))}
+              {!searching &&
+                results.map((r, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => pickResult(r)}
+                    className="w-full flex items-start gap-2 px-4 py-2.5 hover:bg-muted text-left text-xs text-foreground"
+                  >
+                    <MapPin
+                      size={12}
+                      className="text-primary shrink-0 mt-0.5"
+                    />
+                    <span className="line-clamp-2">
+                      {formatShortAddress(r.address, r.display_name)}{" "}
+                      {r.address?.house_number && `, ${r.address.house_number}`}
+                    </span>
+                  </button>
+                ))}
             </div>
           )}
         </div>
@@ -301,7 +363,8 @@ export function LocationPicker({
         <p className="text-xs text-muted-foreground flex items-center gap-1 px-1">
           <MapPin size={11} className="shrink-0" />
           <span className="truncate">
-            {value.address}{value.number ? `, ${value.number}` : ""}
+            {value.address}
+            {value.number ? `, ${value.number}` : ""}
           </span>
         </p>
       )}

@@ -2,7 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 export type EventCategory =
-  | "cultural" | "esportivo" | "educacional" | "comunitario" | "escolar" | "associacao";
+  | "cultural"
+  | "esportivo"
+  | "educacional"
+  | "comunitario"
+  | "escolar"
+  | "associacao";
 
 export interface UIEvent {
   id: string;
@@ -11,7 +16,7 @@ export interface UIEvent {
   avatar: string;
   title: string;
   description: string;
-  eventDate: string;   // ISO date, e.g. "2026-09-20"
+  eventDate: string; // ISO date, e.g. "2026-09-20"
   eventTime: string | null; // "19:00"
   location: string;
   image: string | null;
@@ -35,7 +40,7 @@ export function useEvents() {
       .select(
         `id, user_id, title, description, event_date, event_time, location,
          image_url, category, district, created_at,
-         profiles:user_id ( username, avatar_url )`
+         profiles:user_id ( username, avatar_url )`,
       )
       .order("event_date", { ascending: true });
 
@@ -85,7 +90,15 @@ interface CreateEventParams {
 }
 
 export async function createEvent({
-  userId, title, description, eventDate, eventTime, location, category, district, file,
+  userId,
+  title,
+  description,
+  eventDate,
+  eventTime,
+  location,
+  category,
+  district,
+  file,
 }: CreateEventParams) {
   let imageUrl: string | null = null;
 
@@ -97,7 +110,9 @@ export async function createEvent({
       .upload(path, file, { cacheControl: "3600", upsert: false });
     if (uploadError) throw uploadError;
 
-    const { data: urlData } = supabase.storage.from("event-images").getPublicUrl(path);
+    const { data: urlData } = supabase.storage
+      .from("event-images")
+      .getPublicUrl(path);
     imageUrl = urlData.publicUrl;
   }
 

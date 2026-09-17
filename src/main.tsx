@@ -6,5 +6,5 @@ import "./styles/index.css";
 createRoot(document.getElementById("root")!).render(
   <AuthProvider>
     <App />
-  </AuthProvider>
+  </AuthProvider>,
 );

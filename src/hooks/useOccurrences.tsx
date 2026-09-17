@@ -4,7 +4,13 @@ import { supabase } from "../lib/supabase";
 // ─── Tipos que espelham o que a UI (App.tsx) já espera ─────────────────────
 
 export type ProblemId =
-  | "buraco" | "iluminacao" | "lixo" | "alagamento" | "calcada" | "arvore" | "sinalizacao";
+  | "buraco"
+  | "iluminacao"
+  | "lixo"
+  | "alagamento"
+  | "calcada"
+  | "arvore"
+  | "sinalizacao";
 export type PostStatus = "aberto" | "em_analise" | "resolvido";
 
 export interface UIComment {
@@ -69,7 +75,7 @@ export function usePosts(currentUserId: string | null) {
         `id, user_id, location, image_url, caption, problem_type, status, district, created_at,
          profiles:user_id ( username, avatar_url ),
          likes:likes(count),
-         comments:comments(count)`
+         comments:comments(count)`,
       )
       .order("created_at", { ascending: false });
 
@@ -146,28 +152,50 @@ export async function fetchComments(postId: string): Promise<UIComment[]> {
 }
 
 export async function addComment(postId: string, userId: string, text: string) {
-  const { error } = await supabase.from("comments").insert({ post_id: postId, user_id: userId, text });
+  const { error } = await supabase
+    .from("comments")
+    .insert({ post_id: postId, user_id: userId, text });
   if (error) throw error;
 }
 
 // ─── Curtidas e salvos ───────────────────────────────────────────────────────
 
-export async function toggleLike(postId: string, userId: string, currentlyLiked: boolean) {
+export async function toggleLike(
+  postId: string,
+  userId: string,
+  currentlyLiked: boolean,
+) {
   if (currentlyLiked) {
-    const { error } = await supabase.from("likes").delete().eq("post_id", postId).eq("user_id", userId);
+    const { error } = await supabase
+      .from("likes")
+      .delete()
+      .eq("post_id", postId)
+      .eq("user_id", userId);
     if (error) throw error;
   } else {
-    const { error } = await supabase.from("likes").insert({ post_id: postId, user_id: userId });
+    const { error } = await supabase
+      .from("likes")
+      .insert({ post_id: postId, user_id: userId });
     if (error) throw error;
   }
 }
 
-export async function toggleSave(postId: string, userId: string, currentlySaved: boolean) {
+export async function toggleSave(
+  postId: string,
+  userId: string,
+  currentlySaved: boolean,
+) {
   if (currentlySaved) {
-    const { error } = await supabase.from("saves").delete().eq("post_id", postId).eq("user_id", userId);
+    const { error } = await supabase
+      .from("saves")
+      .delete()
+      .eq("post_id", postId)
+      .eq("user_id", userId);
     if (error) throw error;
   } else {
-    const { error } = await supabase.from("saves").insert({ post_id: postId, user_id: userId });
+    const { error } = await supabase
+      .from("saves")
+      .insert({ post_id: postId, user_id: userId });
     if (error) throw error;
   }
 }
@@ -186,18 +214,29 @@ interface CreatePostParams {
 }
 
 export async function createPost({
-  userId, file, caption, location, problemType, district, latitude, longitude,
+  userId,
+  file,
+  caption,
+  location,
+  problemType,
+  district,
+  latitude,
+  longitude,
 }: CreatePostParams) {
   const ext = file.name.split(".").pop() || "jpg";
   const path = `${userId}/${Date.now()}.${ext}`;
 
-  const { error: uploadError } = await supabase.storage.from("post-images").upload(path, file, {
-    cacheControl: "3600",
-    upsert: false,
-  });
+  const { error: uploadError } = await supabase.storage
+    .from("post-images")
+    .upload(path, file, {
+      cacheControl: "3600",
+      upsert: false,
+    });
   if (uploadError) throw uploadError;
 
-  const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(path);
+  const { data: urlData } = supabase.storage
+    .from("post-images")
+    .getPublicUrl(path);
 
   const { data, error } = await supabase
     .from("posts")
@@ -231,7 +270,7 @@ export async function updatePostStatus(
   status: PostStatus,
   obs: string,
   changedByUserId: string,
-  postOwnerUserId: string
+  postOwnerUserId: string,
 ) {
   const { error: updateError } = await supabase
     .from("posts")
@@ -274,7 +313,9 @@ export interface UINotification {
   postImage?: string | null;
 }
 
-export async function fetchNotifications(userId: string): Promise<UINotification[]> {
+export async function fetchNotifications(
+  userId: string,
+): Promise<UINotification[]> {
   const { data, error } = await supabase
     .from("notifications")
     .select("id, type, message, read, created_at, posts:post_id ( image_url )")
