@@ -93,6 +93,7 @@ import {
   CommentSheet,
 } from "./OccurrenceComponents";
 import { ProfileTab } from "./ProfileComponents";
+import { YoshiAssistant } from "../components/YoshiAssistant";
 
 export function CidadaoApp({
   posts,
@@ -788,6 +789,7 @@ export function CidadaoApp({
           />
         )}
       </AnimatePresence>
+      <YoshiAssistant />
       <style>{`.scrollbar-hide::-webkit-scrollbar{display:none}.scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}`}</style>
     </div>
   );

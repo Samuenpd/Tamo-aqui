@@ -24,7 +24,7 @@ function AuthenticatedApp({ profile }: { profile: Profile }) {
   const { signOut } = useAuth();
   const {
     posts,
-    loading: postsLoading,
+    hasLoaded: postsLoaded,
     refetch,
     setPosts,
   } = usePosts(profile.id);
@@ -56,7 +56,8 @@ function AuthenticatedApp({ profile }: { profile: Profile }) {
     await updatePostStatusDb(post.id, status, obs, profile.id, post.userId);
     await refetch();
   };
-  if (postsLoading && posts.length === 0)
+  // Atualizações posteriores ocorrem em segundo plano, sem trocar a tela inteira.
+  if (!postsLoaded)
     return <Spinner label="Carregando ocorrências…" />;
   if (profile.role === "prefeitura")
     return (

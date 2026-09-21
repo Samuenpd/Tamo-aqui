@@ -65,6 +65,7 @@ function timeAgo(iso: string): string {
 export function usePosts(currentUserId: string | null) {
   const [posts, setPosts] = useState<UIPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   const refetch = useCallback(async () => {
     setLoading(true);
@@ -82,6 +83,7 @@ export function usePosts(currentUserId: string | null) {
     if (error || !rows) {
       console.error(error);
       setLoading(false);
+      setHasLoaded(true);
       return;
     }
 
@@ -120,13 +122,14 @@ export function usePosts(currentUserId: string | null) {
 
     setPosts(mapped);
     setLoading(false);
+    setHasLoaded(true);
   }, [currentUserId]);
 
   useEffect(() => {
     refetch();
   }, [refetch]);
 
-  return { posts, loading, refetch, setPosts };
+  return { posts, loading, hasLoaded, refetch, setPosts };
 }
 
 // ─── Comentários de um post específico (sob demanda, ao abrir o sheet) ──────
