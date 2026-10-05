@@ -175,7 +175,7 @@ https://tamo-aqui.pages.dev
 
 👨‍💻 Desenvolvedor
 
-Projeto desenvolvido pela equipe LudusCode como parte da nossa jornada de aprendizado e desenvolvimento de soluções utilizando tecnologia para problemas reais.
+Projeto desenvolvido pela equipe PragmaNation como parte da nossa jornada de aprendizado e desenvolvimento de soluções utilizando tecnologia para problemas reais.
 
 ---
 
