@@ -130,7 +130,7 @@ export function WelcomeScreen({
           TamoAqui
         </h1>
         <p className="text-base text-muted-foreground mt-2 font-semibold">
-          Prefeitura de São Paulo
+          Prefeitura de Guarulhos
         </p>
         <p className="text-sm text-muted-foreground mt-1">
           Reporte problemas. Acompanhe soluções.
@@ -206,7 +206,7 @@ export function WelcomeScreen({
         transition={{ delay: 0.4 }}
         className="text-xs text-muted-foreground mt-10 text-center"
       >
-        Versão 2.6 · Secretaria de Serviços Urbanos
+        Versão 3.2 · Secretaria de Serviços Urbanos
       </motion.p>
     </div>
   );
