@@ -464,6 +464,8 @@ export function SignUpScreen({
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirmationSent, setConfirmationSent] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
   const validateStep1 = () => {
     const e: Record<string, string> = {};
@@ -493,6 +495,10 @@ export function SignUpScreen({
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     if (!validateStep2()) return;
+    if (!acceptedTerms) {
+      setErrors((current) => ({ ...current, terms: "Leia e aceite os Termos de Uso para continuar." }));
+      return;
+    }
     setLoading(true);
     const { error, needsConfirmation } = await signUp({
       email,
@@ -900,6 +906,32 @@ export function SignUpScreen({
                 )}
               </div>
 
+              <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <label className="flex items-start gap-3 text-sm text-muted-foreground cursor-pointer">
+                  <input type="checkbox" checked={acceptedTerms} onChange={(e) => { setAcceptedTerms(e.target.checked); setErrors((current) => ({ ...current, terms: "" })); }} className="mt-1 accent-primary" />
+                  <span>Li e aceito os <button type="button" onClick={() => setShowTerms(true)} className="font-bold text-primary underline underline-offset-2">Termos de Uso</button>.</span>
+                </label>
+                {errors.terms && <p className="text-xs text-destructive mt-2 font-semibold">{errors.terms}</p>}
+              </div>
+
+              {showTerms && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="terms-title">
+                  <div className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl border border-border bg-card p-6 text-foreground shadow-2xl">
+                    <h2 id="terms-title" className="text-xl font-black mb-4">Termos de Uso — TamoAqui</h2>
+                    <div className="space-y-4 text-sm text-muted-foreground">
+                      <p><strong className="text-foreground">1. Sobre o serviço.</strong> O TamoAqui permite que moradores de Guarulhos registrem e acompanhem ocorrências urbanas e interajam com a comunidade. O serviço não substitui canais oficiais de emergência ou atendimento público.</p>
+                      <p><strong className="text-foreground">2. Conta e responsabilidade.</strong> Você deve fornecer informações verdadeiras, manter suas credenciais em segurança e ser responsável pelas atividades realizadas em sua conta. O acesso da Prefeitura é restrito e criado pela administração.</p>
+                      <p><strong className="text-foreground">3. Conteúdo e conduta.</strong> Publique informações relevantes e de boa-fé. Não publique conteúdo ilegal, ameaçador, discriminatório, enganoso, ofensivo, que viole direitos de terceiros ou exponha dados pessoais sem autorização. Não use o serviço para spam, fraude ou acesso indevido.</p>
+                      <p><strong className="text-foreground">4. Moderação e disponibilidade.</strong> Conteúdos que violem estes termos podem ser removidos e contas podem ter o acesso limitado. O serviço pode sofrer interrupções para manutenção, segurança ou por fatores fora do nosso controle.</p>
+                      <p><strong className="text-foreground">5. Privacidade.</strong> Dados da conta e conteúdos enviados são usados para operar o serviço, acompanhar ocorrências e proteger a plataforma, conforme a legislação aplicável e o aviso de privacidade do serviço. Evite incluir dados pessoais sensíveis nos relatos.</p>
+                      <p><strong className="text-foreground">6. Alterações e contato.</strong> Estes termos podem ser atualizados para refletir mudanças no serviço ou na legislação. A versão vigente será apresentada no cadastro. Para dúvidas, utilize os canais oficiais informados pela Prefeitura de Guarulhos.</p>
+                      <p>Ao marcar a caixa de aceite e criar sua conta, você declara que leu e concorda com estes termos.</p>
+                    </div>
+                    <button type="button" onClick={() => setShowTerms(false)} className="w-full mt-6 py-3 rounded-xl bg-primary text-primary-foreground font-bold">Fechar</button>
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-3 mt-2">
                 <button
                   type="button"
@@ -910,7 +942,7 @@ export function SignUpScreen({
                 </button>
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || !acceptedTerms}
                   className="flex-1 py-4 rounded-xl text-sm font-black flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
                   style={{
                     background: "linear-gradient(135deg, #f97316, #ea580c)",
